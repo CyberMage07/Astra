@@ -7,6 +7,9 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from packages.config import get_settings
+from packages.core import doctor_passed, run_doctor_checks
+
 app = typer.Typer(
     name="astra",
     help="Enterprise-oriented static and dynamic malware analysis platform.",
@@ -33,23 +36,28 @@ def version_info() -> None:
 
 @app.command()
 def doctor() -> None:
-    """Check whether Astra core dependencies are available."""
-    checks = [
-        ("Python environment", True),
-        ("Rich terminal engine", True),
-        ("Configuration system", True),
-        ("File identification", True),
-    ]
+    """Check Astra's runtime environment and optional tooling."""
+    settings = get_settings()
+    checks = run_doctor_checks(settings)
 
     table = Table(title="Astra Environment Check", show_header=True)
     table.add_column("Component", style="cyan")
+    table.add_column("Requirement", justify="center")
     table.add_column("Status", justify="center")
+    table.add_column("Details", style="dim")
 
-    for component, available in checks:
-        status = "[green]READY[/green]" if available else "[red]FAILED[/red]"
-        table.add_row(component, status)
+    for check in checks:
+        requirement = "Required" if check.required else "Optional"
+        status = "[green]READY[/green]" if check.available else "[red]MISSING[/red]"
+        table.add_row(check.component, requirement, status, check.details)
 
     console.print(table)
+
+    if not doctor_passed(checks):
+        console.print("[bold red]One or more required checks failed.[/bold red]")
+        raise typer.Exit(code=1)
+
+    console.print("[bold green]All required Astra checks passed.[/bold green]")
 
 
 @app.command()
