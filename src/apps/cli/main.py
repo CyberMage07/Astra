@@ -1,6 +1,7 @@
 """Astra command-line interface."""
 
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 
 import typer
 from rich.console import Console
@@ -8,7 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from packages.config import get_settings
-from packages.core import doctor_passed, run_doctor_checks
+from packages.core import doctor_passed, ingest_sample, run_doctor_checks
 
 app = typer.Typer(
     name="astra",
@@ -58,6 +59,28 @@ def doctor() -> None:
         raise typer.Exit(code=1)
 
     console.print("[bold green]All required Astra checks passed.[/bold green]")
+
+
+@app.command()
+def ingest(sample: Path) -> None:
+    """Hash and store a sample in Astra quarantine."""
+    settings = get_settings()
+    metadata = ingest_sample(sample, settings)
+
+    table = Table(title="Sample Ingested", show_header=False)
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+
+    table.add_row("Sample ID", str(metadata.sample_id))
+    table.add_row("Original name", metadata.original_name)
+    table.add_row("Size", f"{metadata.size_bytes:,} bytes")
+    table.add_row("Quarantine path", str(metadata.source_path))
+    table.add_row("MD5", metadata.hashes.md5)
+    table.add_row("SHA-1", metadata.hashes.sha1)
+    table.add_row("SHA-256", metadata.hashes.sha256)
+    table.add_row("SHA-512", metadata.hashes.sha512)
+
+    console.print(table)
 
 
 @app.command()
