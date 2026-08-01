@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from analyzers.filetype import identify_file
 from packages.config import get_settings
 from packages.core import doctor_passed, ingest_sample, run_doctor_checks
 
@@ -79,6 +80,35 @@ def ingest(sample: Path) -> None:
     table.add_row("SHA-1", metadata.hashes.sha1)
     table.add_row("SHA-256", metadata.hashes.sha256)
     table.add_row("SHA-512", metadata.hashes.sha512)
+
+    console.print(table)
+
+
+@app.command()
+def identify(sample: Path) -> None:
+    """Identify the real file type using libmagic."""
+    result = identify_file(sample)
+
+    table = Table(title="File Identification", show_header=False)
+    table.add_column("Field", style="cyan")
+    table.add_column("Value")
+
+    table.add_row("Filename", result.file_name)
+    table.add_row("Extension", result.extension or "(none)")
+    table.add_row("Detected family", result.detected_family)
+    table.add_row("MIME type", result.mime_type)
+    table.add_row("Magic", result.magic_description)
+    table.add_row("Executable", "Yes" if result.is_executable else "No")
+
+    if result.extension_matches is None:
+        extension_status = "Unknown"
+    elif result.extension_matches:
+        extension_status = "Match"
+    else:
+        extension_status = "Mismatch"
+
+    table.add_row("Extension check", extension_status)
+    table.add_row("Confidence", f"{result.confidence}%")
 
     console.print(table)
 
