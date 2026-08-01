@@ -17,6 +17,7 @@ keywords = [
 ]
 dependencies = [
     "httpx>=0.24.1",
+    "pefile>=2024.8.26",
     "platformdirs>=4.0.0",
     "pydantic>=2.5.3",
     "pydantic-settings>=2.0.3",
@@ -77,6 +78,9 @@ warn_unused_configs = true
 pretty = true
 show_error_codes = true
 mypy_path = "src"
+[[tool.mypy.overrides]]
+module = ["pefile"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "7.0"

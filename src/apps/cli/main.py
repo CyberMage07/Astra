@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from analyzers.filetype import identify_file
+from analyzers.pe import PEAnalyzer
 from packages.config import get_settings
 from packages.core import doctor_passed, ingest_sample, run_doctor_checks
 
@@ -111,6 +112,83 @@ def identify(sample: Path) -> None:
     table.add_row("Confidence", f"{result.confidence}%")
 
     console.print(table)
+
+
+@app.command()
+def pe(sample: Path) -> None:
+    """Perform static analysis of a Windows PE file."""
+    analyzer = PEAnalyzer()
+    result = analyzer.analyze(sample)
+
+    if result.status.value != "completed":
+        console.print(
+            f"[bold red]PE analysis failed:[/bold red] "
+            f"{result.errors[0].message if result.errors else 'Unknown error'}"
+        )
+        raise typer.Exit(code=1)
+
+    data = result.data
+    header = data["header"]
+
+    summary = Table(title="PE Analysis Summary", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Machine", str(header["machine"]))
+    summary.add_row("Architecture", f"{header['architecture_bits']}-bit")
+    summary.add_row("Subsystem", str(header["subsystem"]))
+    summary.add_row("Image base", hex(int(header["image_base"])))
+    summary.add_row("Entry point", hex(int(header["entry_point"])))
+    summary.add_row("Compile timestamp", str(header["compile_timestamp"]))
+    summary.add_row("Sections", str(header["number_of_sections"]))
+    summary.add_row("DLL", "Yes" if header["is_dll"] else "No")
+    summary.add_row("Driver", "Yes" if header["is_driver"] else "No")
+    summary.add_row("Signed", "Yes" if data["signed"] else "No")
+    summary.add_row("Resources", "Yes" if data["has_resources"] else "No")
+    summary.add_row("TLS callbacks", "Yes" if data["has_tls_callbacks"] else "No")
+    summary.add_row("Debug directory", "Yes" if data["has_debug_directory"] else "No")
+    summary.add_row("Overlay size", f"{data['overlay_size']:,} bytes")
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    sections = Table(title="PE Sections")
+    sections.add_column("Name", style="cyan")
+    sections.add_column("Virtual size", justify="right")
+    sections.add_column("Raw size", justify="right")
+    sections.add_column("Entropy", justify="right")
+    sections.add_column("Permissions", justify="center")
+
+    for section in data["sections"]:
+        permissions = "".join(
+            (
+                "R" if section["readable"] else "-",
+                "W" if section["writable"] else "-",
+                "X" if section["executable"] else "-",
+            )
+        )
+
+        sections.add_row(
+            str(section["name"]),
+            str(section["virtual_size"]),
+            str(section["raw_size"]),
+            f"{float(section['entropy']):.2f}",
+            permissions,
+        )
+
+    console.print(sections)
+
+    imports = Table(title=f"PE Imports ({len(data['imports'])})")
+    imports.add_column("Library", style="cyan")
+    imports.add_column("Function")
+
+    for imported in data["imports"][:100]:
+        imports.add_row(str(imported["library"]), str(imported["function"]))
+
+    console.print(imports)
+
+    if len(data["imports"]) > 100:
+        console.print(f"[dim]Showing the first 100 of {len(data['imports'])} imports.[/dim]")
 
 
 @app.command()
