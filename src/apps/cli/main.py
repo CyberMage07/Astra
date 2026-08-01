@@ -10,6 +10,7 @@ from rich.table import Table
 
 from analyzers.filetype import identify_file
 from analyzers.pe import PEAnalyzer
+from analyzers.strings import StringsAnalyzer
 from packages.config import get_settings
 from packages.core import doctor_passed, ingest_sample, run_doctor_checks
 
@@ -112,6 +113,65 @@ def identify(sample: Path) -> None:
     table.add_row("Confidence", f"{result.confidence}%")
 
     console.print(table)
+
+
+@app.command()
+def strings(
+    sample: Path,
+    minimum_length: int = 4,
+    limit: int = 200,
+) -> None:
+    """Extract printable ASCII and UTF-16 strings from a sample."""
+    analyzer = StringsAnalyzer(
+        minimum_length=minimum_length,
+        maximum_results=limit,
+    )
+    result = analyzer.analyze(sample)
+
+    if result.status.value != "completed":
+        console.print(
+            f"[bold red]String extraction failed:[/bold red] "
+            f"{result.errors[0].message if result.errors else 'Unknown error'}"
+        )
+        raise typer.Exit(code=1)
+
+    data = result.data
+    extracted = data["strings"]
+
+    summary = Table(title="String Extraction Summary", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row("Minimum length", str(data["minimum_length"]))
+    summary.add_row("Total strings", str(data["total_count"]))
+    summary.add_row("Displayed", str(len(extracted)))
+    summary.add_row("Truncated", "Yes" if data["truncated"] else "No")
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    strings_table = Table(title=f"Extracted Strings ({len(extracted)})")
+    strings_table.add_column("Offset", justify="right", style="dim")
+    strings_table.add_column("Encoding", justify="center")
+    strings_table.add_column("Length", justify="right")
+    strings_table.add_column("Value")
+
+    for entry in extracted:
+        strings_table.add_row(
+            f"0x{int(entry['offset']):08x}",
+            str(entry["encoding"]),
+            str(entry["length"]),
+            str(entry["value"]),
+        )
+
+    console.print(strings_table)
+
+    if data["truncated"]:
+        console.print(
+            f"[dim]Showing the first {len(extracted)} of "
+            f"{data['total_count']} extracted strings.[/dim]"
+        )
 
 
 @app.command()

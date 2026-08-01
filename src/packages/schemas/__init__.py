@@ -17,12 +17,18 @@ from packages.schemas.pe import (
     PESection,
 )
 from packages.schemas.sample import FileHashes, SampleMetadata
+from packages.schemas.strings import (
+    ExtractedString,
+    StringEncoding,
+    StringsAnalysisData,
+)
 
 __all__ = [
     "AnalysisResult",
     "AnalysisStatus",
     "AnalyzerError",
     "Evidence",
+    "ExtractedString",
     "FileHashes",
     "FileTypeResult",
     "Finding",
@@ -33,4 +39,6 @@ __all__ = [
     "PESection",
     "SampleMetadata",
     "Severity",
+    "StringEncoding",
+    "StringsAnalysisData",
 ]
