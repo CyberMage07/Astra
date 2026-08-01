@@ -6,7 +6,14 @@ from unittest.mock import patch
 from typer.testing import CliRunner
 
 from apps.cli.main import app
-from packages.schemas import AnalysisResult, AnalysisStatus, AnalyzerError
+from packages.schemas import (
+    AnalysisResult,
+    AnalysisStatus,
+    AnalyzerError,
+    Evidence,
+    Finding,
+    Severity,
+)
 
 runner = CliRunner()
 
@@ -18,6 +25,22 @@ def _completed_result() -> AnalysisResult:
         analyzer_version="0.1.0",
         status=AnalysisStatus.COMPLETED,
         duration_ms=15,
+        findings=(
+            Finding(
+                title="Suspicious API import: CreateRemoteThread",
+                description="Can create a thread inside another process.",
+                category="process-injection",
+                severity=Severity.HIGH,
+                confidence=75,
+                evidence=(
+                    Evidence(
+                        kind="pe-import",
+                        value="CreateRemoteThread",
+                        location="KERNEL32.dll",
+                    ),
+                ),
+            ),
+        ),
         data={
             "header": {
                 "machine": "x86-64",
@@ -76,6 +99,23 @@ def test_pe_command_displays_analysis(tmp_path: Path) -> None:
     assert "64-bit" in result.stdout
     assert ".text" in result.stdout
     assert "CreateFileW" in result.stdout
+    assert "Security Findings" in result.stdout
+    assert "CreateRemoteThread" in result.stdout
+    assert "HIGH" in result.stdout
+
+
+def test_pe_command_displays_clean_findings_panel(tmp_path: Path) -> None:
+    """The PE command should clearly report when no findings exist."""
+    sample = tmp_path / "clean.exe"
+    sample.write_bytes(b"MZ")
+
+    clean_result = _completed_result().model_copy(update={"findings": ()})
+
+    with patch("apps.cli.main.PEAnalyzer.analyze", return_value=clean_result):
+        result = runner.invoke(app, ["pe", str(sample)])
+
+    assert result.exit_code == 0
+    assert "No suspicious PE indicators were detected" in result.stdout
 
 
 def test_pe_command_handles_failed_analysis(tmp_path: Path) -> None:

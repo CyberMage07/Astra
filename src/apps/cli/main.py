@@ -178,6 +178,47 @@ def pe(sample: Path) -> None:
 
     console.print(sections)
 
+    if result.findings:
+        findings_table = Table(title=f"Security Findings ({len(result.findings)})")
+        findings_table.add_column("Severity", justify="center")
+        findings_table.add_column("Finding", style="cyan")
+        findings_table.add_column("Confidence", justify="right")
+        findings_table.add_column("Evidence")
+
+        severity_styles = {
+            "info": "blue",
+            "low": "green",
+            "medium": "yellow",
+            "high": "red",
+            "critical": "bold white on red",
+        }
+
+        for finding in result.findings:
+            severity = finding.severity.value
+            style = severity_styles.get(severity, "white")
+
+            evidence = ", ".join(
+                f"{item.value} ({item.location})" if item.location else item.value
+                for item in finding.evidence
+            )
+
+            findings_table.add_row(
+                f"[{style}]{severity.upper()}[/{style}]",
+                finding.title,
+                f"{finding.confidence}%",
+                evidence or "(none)",
+            )
+
+        console.print(findings_table)
+    else:
+        console.print(
+            Panel(
+                "[green]No suspicious PE indicators were detected by the current rules.[/green]",
+                title="Security Findings",
+                border_style="green",
+            )
+        )
+
     imports = Table(title=f"PE Imports ({len(data['imports'])})")
     imports.add_column("Library", style="cyan")
     imports.add_column("Function")
