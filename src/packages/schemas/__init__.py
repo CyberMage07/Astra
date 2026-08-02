@@ -10,6 +10,11 @@ from packages.schemas.analysis import (
 )
 from packages.schemas.entropy import EntropyAnalysisData, EntropyRegion
 from packages.schemas.filetype import FileTypeResult
+from packages.schemas.imports import (
+    ImportAnalysisData,
+    ImportBehaviorSummary,
+    ImportIndicator,
+)
 from packages.schemas.pe import (
     PEAnalysisData,
     PEExport,
@@ -36,6 +41,9 @@ __all__ = [
     "FileHashes",
     "FileTypeResult",
     "Finding",
+    "ImportAnalysisData",
+    "ImportBehaviorSummary",
+    "ImportIndicator",
     "PEAnalysisData",
     "PEExport",
     "PEHeaderInfo",

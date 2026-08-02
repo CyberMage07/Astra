@@ -11,6 +11,7 @@ from rich.table import Table
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.pe import PEAnalyzer
+from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
 from analyzers.yara import YaraAnalyzer
 from packages.config import get_settings
@@ -368,6 +369,85 @@ def pe(sample: Path) -> None:
 
     if len(data["imports"]) > 100:
         console.print(f"[dim]Showing the first 100 of {len(data['imports'])} imports.[/dim]")
+
+
+@app.command()
+def imports(sample: Path) -> None:
+    """Profile suspicious Windows API imports."""
+    analyzer = ImportAnalyzer()
+    result = analyzer.analyze(sample)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown import-analysis error"
+        console.print(f"[bold red]Import analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(title="Import Behavior Analysis", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row("Total imports", str(data["total_imports"]))
+    summary.add_row("Suspicious imports", str(data["suspicious_imports"]))
+    summary.add_row("Behavior groups", str(len(data["behaviors"])))
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    if not result.findings:
+        console.print("[green]No suspicious imported APIs detected.[/green]")
+        return
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    indicators = Table(title=f"Suspicious Imports ({len(result.findings)})")
+    indicators.add_column("Severity", justify="center")
+    indicators.add_column("Library", style="cyan")
+    indicators.add_column("Function")
+    indicators.add_column("Behavior")
+    indicators.add_column("Confidence", justify="right")
+    indicators.add_column("MITRE")
+
+    for finding in result.findings:
+        evidence = finding.evidence[0]
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
+
+        indicators.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            evidence.location or "(unknown)",
+            evidence.value,
+            finding.category,
+            f"{finding.confidence}%",
+            ", ".join(finding.attack_techniques) or "-",
+        )
+
+    console.print(indicators)
+
+    behaviors = Table(title="Behavior Summary")
+    behaviors.add_column("Behavior", style="cyan")
+    behaviors.add_column("Count", justify="right")
+    behaviors.add_column("Maximum severity", justify="center")
+
+    for behavior in data["behaviors"]:
+        severity = str(behavior["maximum_severity"])
+        style = severity_styles.get(severity, "white")
+
+        behaviors.add_row(
+            str(behavior["category"]),
+            str(behavior["count"]),
+            f"[{style}]{severity.upper()}[/{style}]",
+        )
+
+    console.print(behaviors)
 
 
 @app.command()
