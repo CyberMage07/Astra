@@ -8,6 +8,7 @@ from packages.schemas.analysis import (
     Finding,
     Severity,
 )
+from packages.schemas.entropy import EntropyAnalysisData, EntropyRegion
 from packages.schemas.filetype import FileTypeResult
 from packages.schemas.pe import (
     PEAnalysisData,
@@ -28,6 +29,8 @@ __all__ = [
     "AnalysisResult",
     "AnalysisStatus",
     "AnalyzerError",
+    "EntropyAnalysisData",
+    "EntropyRegion",
     "Evidence",
     "ExtractedString",
     "FileHashes",

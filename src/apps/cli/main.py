@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.pe import PEAnalyzer
 from analyzers.strings import StringsAnalyzer
@@ -174,6 +175,81 @@ def strings(
             f"[dim]Showing the first {len(extracted)} of "
             f"{data['total_count']} extracted strings.[/dim]"
         )
+
+
+@app.command()
+def entropy(
+    sample: Path,
+    block_size: int = 4096,
+) -> None:
+    """Analyze whole-file and block-level entropy."""
+    analyzer = EntropyAnalyzer(block_size=block_size)
+    result = analyzer.analyze(sample)
+    data = result.data
+
+    summary = Table(title="Entropy Analysis", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row("File size", f"{int(data['file_size']):,} bytes")
+    summary.add_row("Block size", f"{int(data['block_size']):,} bytes")
+    summary.add_row("Overall entropy", f"{float(data['overall_entropy']):.4f} / 8.0000")
+    summary.add_row(
+        "Maximum region entropy",
+        f"{float(data['maximum_region_entropy']):.4f}",
+    )
+    summary.add_row(
+        "High-entropy regions",
+        str(data["high_entropy_regions"]),
+    )
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    regions = Table(title=f"Entropy Regions ({len(data['regions'])})")
+    regions.add_column("Offset", justify="right", style="dim")
+    regions.add_column("Size", justify="right")
+    regions.add_column("Entropy", justify="right")
+    regions.add_column("Assessment")
+
+    for region in data["regions"]:
+        entropy_value = float(region["entropy"])
+        assessment = "HIGH" if entropy_value >= 7.2 else "Normal"
+
+        regions.add_row(
+            f"0x{int(region['offset']):08x}",
+            str(region["size"]),
+            f"{entropy_value:.4f}",
+            assessment,
+        )
+
+    console.print(regions)
+
+    if not result.findings:
+        console.print("[green]No high-entropy indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Entropy Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding", style="cyan")
+    findings.add_column("Confidence", justify="right")
+    findings.add_column("Evidence")
+
+    for finding in result.findings:
+        evidence = ", ".join(
+            f"{item.value} ({item.location})" if item.location else item.value
+            for item in finding.evidence
+        )
+
+        findings.add_row(
+            finding.severity.value.upper(),
+            finding.title,
+            f"{finding.confidence}%",
+            evidence or "(none)",
+        )
+
+    console.print(findings)
 
 
 @app.command()
