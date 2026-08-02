@@ -21,6 +21,11 @@ from packages.schemas.ioc import (
     IOCSummary,
     IOCType,
 )
+from packages.schemas.metadata import (
+    MetadataAnalysisData,
+    MetadataEntry,
+    MetadataSource,
+)
 from packages.schemas.packer import (
     PackerAnalysisData,
     PackerCandidate,
@@ -67,6 +72,9 @@ __all__ = [
     "ImportAnalysisData",
     "ImportBehaviorSummary",
     "ImportIndicator",
+    "MetadataAnalysisData",
+    "MetadataEntry",
+    "MetadataSource",
     "PEAnalysisData",
     "PEExport",
     "PEHeaderInfo",

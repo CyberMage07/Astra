@@ -11,6 +11,7 @@ from rich.table import Table
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.ioc import IOCAnalyzer
+from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -549,6 +550,89 @@ def pe(sample: Path) -> None:
 
     if len(data["imports"]) > 100:
         console.print(f"[dim]Showing the first 100 of {len(data['imports'])} imports.[/dim]")
+
+
+@app.command()
+def metadata(sample: Path) -> None:
+    """Extract normalized PE metadata."""
+    result = MetadataAnalyzer().analyze(sample)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown metadata-analysis error"
+        console.print(f"[bold red]Metadata analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(title="Metadata Analysis", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row("Entries", str(data["entry_count"]))
+    summary.add_row(
+        "Version info",
+        "Yes" if data["has_version_info"] else "No",
+    )
+    summary.add_row(
+        "Compile timestamp",
+        str(data["compile_timestamp"] or "Unknown"),
+    )
+    summary.add_row(
+        "Compile datetime",
+        str(data["compile_datetime"] or "Unknown"),
+    )
+    summary.add_row(
+        "Suspicious timestamp",
+        "Yes" if data["suspicious_timestamp"] else "No",
+    )
+    summary.add_row(
+        "Future timestamp",
+        "Yes" if data["future_timestamp"] else "No",
+    )
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    fields = Table(title="Normalized Metadata")
+    fields.add_column("Field", style="cyan")
+    fields.add_column("Value")
+
+    normalized_fields = (
+        ("Company", data["company_name"]),
+        ("Product", data["product_name"]),
+        ("Description", data["file_description"]),
+        ("Original filename", data["original_filename"]),
+        ("Internal name", data["internal_name"]),
+        ("Product version", data["product_version"]),
+        ("File version", data["file_version"]),
+        ("Copyright", data["legal_copyright"]),
+        ("Language", data["language"]),
+    )
+
+    for label, value in normalized_fields:
+        if value:
+            fields.add_row(label, str(value))
+
+    if fields.row_count:
+        console.print(fields)
+    else:
+        console.print("[yellow]No normalized version metadata found.[/yellow]")
+
+    if result.findings:
+        findings = Table(title="Metadata Findings")
+        findings.add_column("Severity", justify="center")
+        findings.add_column("Finding")
+        findings.add_column("Confidence", justify="right")
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
 
 
 @app.command()

@@ -329,9 +329,95 @@ def _build_summaries(
 def _build_findings(
     indicators: tuple[IOCIndicator, ...],
 ) -> tuple[Finding, ...]:
-    """Create concise findings from extracted IOCs."""
+    """Create concise findings only from materially suspicious IOCs."""
     if not indicators:
         return ()
+
+    suspicious_types = {
+        IOCType.POWERSHELL,
+        IOCType.CMD,
+        IOCType.UNC_PATH,
+        IOCType.REGISTRY_PATH,
+    }
+
+    suspicious_indicators = tuple(
+        indicator for indicator in indicators if indicator.indicator_type in suspicious_types
+    )
+
+    network_indicators = tuple(
+        indicator
+        for indicator in indicators
+        if indicator.indicator_type
+        in {
+            IOCType.URL,
+            IOCType.DOMAIN,
+            IOCType.IPV4,
+        }
+    )
+
+    findings: list[Finding] = []
+
+    if suspicious_indicators:
+        representative = suspicious_indicators[:20]
+
+        findings.append(
+            Finding(
+                title="Suspicious command or system indicators detected",
+                description=(
+                    f"Astra extracted {len(suspicious_indicators)} indicators "
+                    "associated with command execution, registry access, or "
+                    "network-share activity."
+                ),
+                category="ioc",
+                severity=Severity.MEDIUM,
+                confidence=85,
+                evidence=tuple(
+                    Evidence(
+                        kind=indicator.indicator_type.value,
+                        value=indicator.value,
+                        location=(
+                            f"offset 0x{indicator.offset:x}"
+                            if indicator.offset is not None
+                            else None
+                        ),
+                    )
+                    for indicator in representative
+                ),
+                tags=("ioc", "static-analysis", "behavior"),
+            )
+        )
+
+    if len(network_indicators) >= 5:
+        representative = network_indicators[:20]
+
+        findings.append(
+            Finding(
+                title="Multiple network indicators detected",
+                description=(
+                    f"Astra extracted {len(network_indicators)} URLs, domains, "
+                    "or IP addresses from readable sample content. These "
+                    "indicators require contextual review."
+                ),
+                category="network-ioc",
+                severity=Severity.LOW,
+                confidence=60,
+                evidence=tuple(
+                    Evidence(
+                        kind=indicator.indicator_type.value,
+                        value=indicator.value,
+                        location=(
+                            f"offset 0x{indicator.offset:x}"
+                            if indicator.offset is not None
+                            else None
+                        ),
+                    )
+                    for indicator in representative
+                ),
+                tags=("ioc", "network", "static-analysis"),
+            )
+        )
+
+    return tuple(findings)
 
     high_value_types = {
         IOCType.URL,

@@ -9,6 +9,7 @@ from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.hashing import calculate_hashes
 from analyzers.ioc import IOCAnalyzer
+from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -53,6 +54,7 @@ class AnalysisOrchestrator:
         if family == "pe":
             pe_analyzers = (
                 PEAnalyzer(),
+                MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
             )

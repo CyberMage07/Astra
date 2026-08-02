@@ -19,7 +19,10 @@ SEVERITY_WEIGHTS: dict[Severity, int] = {
     Severity.CRITICAL: 40,
 }
 
-CLASSIFICATION_THRESHOLDS: tuple[tuple[int, ThreatClassification], ...] = (
+CLASSIFICATION_THRESHOLDS: tuple[
+    tuple[int, ThreatClassification],
+    ...,
+] = (
     (81, ThreatClassification.HIGHLY_SUSPICIOUS),
     (61, ThreatClassification.HIGH_RISK),
     (41, ThreatClassification.SUSPICIOUS),
@@ -38,7 +41,9 @@ def _finding_score(finding: Finding) -> int:
     return round(severity_weight * confidence_factor)
 
 
-def _classification_for_score(score: int) -> ThreatClassification:
+def _classification_for_score(
+    score: int,
+) -> ThreatClassification:
     """Map a numeric risk score to a threat classification."""
     for threshold, classification in CLASSIFICATION_THRESHOLDS:
         if score >= threshold:
@@ -50,11 +55,14 @@ def _classification_for_score(score: int) -> ThreatClassification:
 def _deduplicate_findings(
     findings: tuple[Finding, ...],
 ) -> tuple[Finding, ...]:
-    """Remove duplicate findings while preserving the strongest instance."""
+    """Remove duplicates while preserving the strongest instance."""
     strongest: dict[tuple[str, str], Finding] = {}
 
     for finding in findings:
-        key = (finding.category, finding.title)
+        key = (
+            finding.category,
+            finding.title,
+        )
         existing = strongest.get(key)
 
         if existing is None:
@@ -73,7 +81,7 @@ def _deduplicate_findings(
 def _build_reasons(
     findings: tuple[Finding, ...],
 ) -> tuple[str, ...]:
-    """Build concise analyst-facing reasons for the assessment."""
+    """Build concise analyst-facing assessment reasons."""
     ranked = sorted(
         findings,
         key=lambda finding: (
@@ -103,7 +111,7 @@ def _calculate_confidence(
     findings: tuple[Finding, ...],
     score: int,
 ) -> int:
-    """Estimate confidence in the aggregated threat assessment."""
+    """Estimate confidence in the aggregated assessment."""
     if not findings:
         return 50
 
@@ -111,7 +119,11 @@ def _calculate_confidence(
         sum(finding.confidence for finding in findings) / len(findings)
     )
 
-    evidence_bonus = min(len(findings) * 3, 15)
+    evidence_bonus = min(
+        len(findings) * 3,
+        15,
+    )
+
     technique_bonus = min(
         len(_collect_attack_techniques(findings)) * 2,
         10,
@@ -126,15 +138,28 @@ def _calculate_confidence(
 def assess_findings(
     findings: tuple[Finding, ...],
 ) -> ThreatAssessment:
-    """Create a normalized threat assessment from analyzer findings."""
+    """Create a normalized threat assessment from findings."""
     unique_findings = _deduplicate_findings(findings)
 
     raw_score = sum(_finding_score(finding) for finding in unique_findings)
 
-    category_counts = Counter(finding.category for finding in unique_findings)
+    meaningful_categories = Counter(
+        finding.category
+        for finding in unique_findings
+        if finding.severity
+        in {
+            Severity.MEDIUM,
+            Severity.HIGH,
+            Severity.CRITICAL,
+        }
+    )
 
     category_diversity_bonus = min(
-        max(len(category_counts) - 1, 0) * 4,
+        max(
+            len(meaningful_categories) - 1,
+            0,
+        )
+        * 4,
         16,
     )
 
@@ -157,6 +182,7 @@ def assess_findings(
     )
 
     classification = _classification_for_score(score)
+
     confidence = _calculate_confidence(
         unique_findings,
         score,
