@@ -11,8 +11,10 @@ from rich.table import Table
 from analyzers.filetype import identify_file
 from analyzers.pe import PEAnalyzer
 from analyzers.strings import StringsAnalyzer
+from analyzers.yara import YaraAnalyzer
 from packages.config import get_settings
 from packages.core import doctor_passed, ingest_sample, run_doctor_checks
+from packages.schemas import AnalysisStatus
 
 app = typer.Typer(
     name="astra",
@@ -290,6 +292,67 @@ def pe(sample: Path) -> None:
 
     if len(data["imports"]) > 100:
         console.print(f"[dim]Showing the first 100 of {len(data['imports'])} imports.[/dim]")
+
+
+@app.command()
+def yara(sample: Path) -> None:
+    """Scan a sample using Astra YARA rules."""
+    analyzer = YaraAnalyzer(Path("rules/yara"))
+    result = analyzer.analyze(sample)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown YARA error"
+        console.print(f"[bold red]YARA scan failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    summary = Table(title="YARA Analysis", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample))
+    summary.add_row("Rules root", str(result.data["rules_root"]))
+    summary.add_row("Matches", str(result.data["match_count"]))
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    if not result.findings:
+        console.print("[green]No YARA matches found.[/green]")
+        return
+
+    findings = Table(title="YARA Findings")
+    findings.add_column("Severity", style="bold")
+    findings.add_column("Rule", style="cyan")
+    findings.add_column("Category")
+    findings.add_column("Confidence", justify="right")
+
+    for finding in result.findings:
+        findings.add_row(
+            finding.severity.value.upper(),
+            finding.title.removeprefix("YARA rule matched: "),
+            finding.category,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+    for finding in result.findings:
+        if not finding.evidence:
+            continue
+
+        evidence = Table(title=f"Evidence — {finding.title}")
+        evidence.add_column("Identifier", style="cyan")
+        evidence.add_column("Offset")
+        evidence.add_column("Matched data")
+
+        for item in finding.evidence:
+            evidence.add_row(
+                str(item.metadata.get("identifier", "")),
+                item.location or "",
+                item.value,
+            )
+
+        console.print(evidence)
 
 
 @app.command()

@@ -26,6 +26,7 @@ dependencies = [
     "structlog>=23.1.0",
     "textual>=0.43.2",
     "typer>=0.19.1",
+    "yara-python>=4.5.4",
 ]
 
 [project.scripts]
@@ -80,6 +81,10 @@ show_error_codes = true
 mypy_path = "src"
 [[tool.mypy.overrides]]
 module = ["pefile"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["yara"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

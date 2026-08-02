@@ -22,6 +22,7 @@ from packages.schemas.strings import (
     StringEncoding,
     StringsAnalysisData,
 )
+from packages.schemas.yara import YaraRuleMatch, YaraStringMatch
 
 __all__ = [
     "AnalysisResult",
@@ -41,4 +42,6 @@ __all__ = [
     "Severity",
     "StringEncoding",
     "StringsAnalysisData",
+    "YaraRuleMatch",
+    "YaraStringMatch",
 ]
