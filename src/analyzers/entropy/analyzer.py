@@ -57,8 +57,12 @@ def _analyze_regions(
 
 
 def _build_findings(data: EntropyAnalysisData) -> tuple[Finding, ...]:
-    """Generate explainable findings from entropy measurements."""
+    """Generate concise, explainable findings from entropy measurements."""
     findings: list[Finding] = []
+
+    high_entropy_regions = tuple(
+        region for region in data.regions if region.entropy >= HIGH_ENTROPY_THRESHOLD
+    )
 
     if data.overall_entropy >= HIGH_ENTROPY_THRESHOLD:
         findings.append(
@@ -82,27 +86,32 @@ def _build_findings(data: EntropyAnalysisData) -> tuple[Finding, ...]:
             )
         )
 
-    for region in data.regions:
-        if region.entropy < HIGH_ENTROPY_THRESHOLD:
-            continue
+    if high_entropy_regions:
+        representative_regions = sorted(
+            high_entropy_regions,
+            key=lambda region: region.entropy,
+            reverse=True,
+        )[:10]
 
         findings.append(
             Finding(
-                title=f"High-entropy region at 0x{region.offset:x}",
+                title="High-entropy regions detected",
                 description=(
-                    "This region has unusually high entropy and may contain "
-                    "compressed, encrypted, or packed content."
+                    f"Astra detected {len(high_entropy_regions)} high-entropy "
+                    "regions. These regions may contain compressed, encrypted, "
+                    "packed, or embedded content."
                 ),
                 category="entropy-region",
                 severity=Severity.MEDIUM,
                 confidence=65,
-                evidence=(
+                evidence=tuple(
                     Evidence(
                         kind="region-entropy",
                         value=f"{region.entropy:.2f}",
                         location=f"offset 0x{region.offset:x}",
                         metadata={"size": region.size},
-                    ),
+                    )
+                    for region in representative_regions
                 ),
                 tags=("entropy", "region"),
             )

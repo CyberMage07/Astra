@@ -2,8 +2,10 @@
 
 from packages.core.doctor import DoctorCheck, doctor_passed, run_doctor_checks
 from packages.core.ingestion import SampleTooLargeError, ingest_sample
+from packages.core.orchestrator import AnalysisOrchestrator
 
 __all__ = [
+    "AnalysisOrchestrator",
     "DoctorCheck",
     "SampleTooLargeError",
     "doctor_passed",

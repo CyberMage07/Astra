@@ -16,7 +16,7 @@ from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
 from analyzers.yara import YaraAnalyzer
 from packages.config import get_settings
-from packages.core import doctor_passed, ingest_sample, run_doctor_checks
+from packages.core import AnalysisOrchestrator, doctor_passed, ingest_sample, run_doctor_checks
 from packages.schemas import AnalysisStatus
 
 app = typer.Typer(
@@ -89,6 +89,81 @@ def ingest(sample: Path) -> None:
     table.add_row("SHA-512", metadata.hashes.sha512)
 
     console.print(table)
+
+
+@app.command()
+def analyze(sample: Path) -> None:
+    """Run Astra's unified static-analysis pipeline."""
+    report = AnalysisOrchestrator().analyze(sample)
+
+    summary = Table(title="Astra Unified Analysis", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", report.original_name)
+    summary.add_row("Path", str(report.sample_path))
+    summary.add_row("Size", f"{report.size_bytes:,} bytes")
+    summary.add_row("Detected family", report.file_type.detected_family)
+    summary.add_row("MIME type", report.file_type.mime_type)
+    summary.add_row("SHA-256", report.hashes.sha256)
+    summary.add_row("Analyzers", str(len(report.analyzer_results)))
+    summary.add_row("Completed", str(report.completed_analyzers))
+    summary.add_row("Failed/partial", str(report.failed_analyzers))
+    summary.add_row("Findings", str(len(report.findings)))
+    summary.add_row("Duration", f"{report.total_duration_ms} ms")
+
+    console.print(summary)
+
+    executions = Table(title="Analyzer Execution")
+    executions.add_column("Analyzer", style="cyan")
+    executions.add_column("Status", justify="center")
+    executions.add_column("Findings", justify="right")
+    executions.add_column("Errors", justify="right")
+    executions.add_column("Duration", justify="right")
+
+    for execution in report.analyzer_executions:
+        executions.add_row(
+            execution.analyzer,
+            execution.status.upper(),
+            str(execution.finding_count),
+            str(execution.error_count),
+            f"{execution.duration_ms} ms",
+        )
+
+    console.print(executions)
+
+    if not report.findings:
+        console.print("[green]No suspicious indicators detected.[/green]")
+        return
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    findings = Table(title=f"Unified Findings ({len(report.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Category", style="cyan")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+    findings.add_column("MITRE")
+
+    for finding in report.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.category,
+            finding.title,
+            f"{finding.confidence}%",
+            ", ".join(finding.attack_techniques) or "-",
+        )
+
+    console.print(findings)
 
 
 @app.command()

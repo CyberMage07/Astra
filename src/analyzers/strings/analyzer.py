@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from bisect import bisect_left
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,7 +20,10 @@ from packages.schemas import (
 ASCII_PATTERN_TEMPLATE = rb"[\x20-\x7e]{%d,}"
 
 
-def _extract_ascii(data: bytes, minimum_length: int) -> list[ExtractedString]:
+def _extract_ascii(
+    data: bytes,
+    minimum_length: int,
+) -> list[ExtractedString]:
     """Extract printable ASCII strings."""
     pattern = re.compile(ASCII_PATTERN_TEMPLATE % minimum_length)
 
@@ -54,7 +58,7 @@ def _scan_utf16(
         if data[null_index] != 0 or not 0x20 <= data[printable_index] <= 0x7E:
             continue
 
-        # Avoid starting midway through an existing ASCII or UTF-16 sequence.
+        # Avoid starting midway through an existing printable sequence.
         if start > 0 and 0x20 <= data[start - 1] <= 0x7E:
             continue
 
@@ -80,9 +84,13 @@ def _scan_utf16(
             continue
 
         raw_value = data[start:cursor]
+
         extracted.append(
             ExtractedString(
-                value=raw_value.decode(encoding.value, errors="replace"),
+                value=raw_value.decode(
+                    encoding.value,
+                    errors="replace",
+                ),
                 offset=start,
                 encoding=encoding,
                 length=character_count,
@@ -92,25 +100,38 @@ def _scan_utf16(
     return extracted
 
 
-def _ranges_overlap(first: ExtractedString, second: ExtractedString) -> bool:
-    """Return whether two extracted strings occupy overlapping bytes."""
-    first_width = first.length if first.encoding is StringEncoding.ASCII else first.length * 2
-    second_width = second.length if second.encoding is StringEncoding.ASCII else second.length * 2
+def _byte_width(value: ExtractedString) -> int:
+    """Return the number of bytes occupied by an extracted string."""
+    if value.encoding is StringEncoding.ASCII:
+        return value.length
 
-    first_end = first.offset + first_width
-    second_end = second.offset + second_width
+    return value.length * 2
 
-    return first.offset < second_end and second.offset < first_end
+
+def _end_offset(value: ExtractedString) -> int:
+    """Return the exclusive byte offset where a string ends."""
+    return value.offset + _byte_width(value)
+
+
+def _overlaps_interval(
+    candidate: ExtractedString,
+    interval_start: int,
+    interval_end: int,
+) -> bool:
+    """Return whether a candidate overlaps a byte interval."""
+    candidate_end = _end_offset(candidate)
+
+    return candidate.offset < interval_end and interval_start < candidate_end
 
 
 def _remove_utf16_overlaps(
     strings: list[ExtractedString],
 ) -> list[ExtractedString]:
-    """Remove shifted or competing UTF-16 interpretations."""
-    accepted: list[ExtractedString] = []
+    """Remove shifted or competing UTF-16 interpretations efficiently."""
+    ascii_strings = [item for item in strings if item.encoding is StringEncoding.ASCII]
 
-    ranked = sorted(
-        strings,
+    utf16_candidates = sorted(
+        (item for item in strings if item.encoding is not StringEncoding.ASCII),
         key=lambda item: (
             -item.length,
             item.offset,
@@ -118,20 +139,44 @@ def _remove_utf16_overlaps(
         ),
     )
 
-    for candidate in ranked:
-        competing = any(
-            candidate.encoding is not StringEncoding.ASCII
-            and existing.encoding is not StringEncoding.ASCII
-            and _ranges_overlap(candidate, existing)
-            for existing in accepted
+    accepted_utf16: list[ExtractedString] = []
+    accepted_starts: list[int] = []
+    accepted_ends: list[int] = []
+
+    for candidate in utf16_candidates:
+        insertion_index = bisect_left(
+            accepted_starts,
+            candidate.offset,
         )
 
-        if not competing:
-            accepted.append(candidate)
+        overlaps_previous = insertion_index > 0 and _overlaps_interval(
+            candidate,
+            accepted_starts[insertion_index - 1],
+            accepted_ends[insertion_index - 1],
+        )
+
+        overlaps_next = insertion_index < len(accepted_utf16) and _overlaps_interval(
+            candidate,
+            accepted_starts[insertion_index],
+            accepted_ends[insertion_index],
+        )
+
+        if overlaps_previous or overlaps_next:
+            continue
+
+        accepted_utf16.insert(insertion_index, candidate)
+        accepted_starts.insert(insertion_index, candidate.offset)
+        accepted_ends.insert(
+            insertion_index,
+            _end_offset(candidate),
+        )
 
     return sorted(
-        accepted,
-        key=lambda item: (item.offset, item.encoding.value),
+        [*ascii_strings, *accepted_utf16],
+        key=lambda item: (
+            item.offset,
+            item.encoding.value,
+        ),
     )
 
 
@@ -193,8 +238,16 @@ class StringsAnalyzer:
 
             extracted = _remove_utf16_overlaps(
                 _extract_ascii(data, self.minimum_length)
-                + _scan_utf16(data, self.minimum_length, StringEncoding.UTF16_LE)
-                + _scan_utf16(data, self.minimum_length, StringEncoding.UTF16_BE)
+                + _scan_utf16(
+                    data,
+                    self.minimum_length,
+                    StringEncoding.UTF16_LE,
+                )
+                + _scan_utf16(
+                    data,
+                    self.minimum_length,
+                    StringEncoding.UTF16_BE,
+                )
             )
 
             truncated = len(extracted) > self.maximum_results

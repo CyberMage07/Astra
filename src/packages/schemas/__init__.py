@@ -27,6 +27,12 @@ from packages.schemas.pe import (
     PEImport,
     PESection,
 )
+from packages.schemas.report import (
+    AnalysisReport,
+    AnalyzerExecution,
+    ThreatAssessment,
+    ThreatClassification,
+)
 from packages.schemas.sample import FileHashes, SampleMetadata
 from packages.schemas.strings import (
     ExtractedString,
@@ -36,9 +42,11 @@ from packages.schemas.strings import (
 from packages.schemas.yara import YaraRuleMatch, YaraStringMatch
 
 __all__ = [
+    "AnalysisReport",
     "AnalysisResult",
     "AnalysisStatus",
     "AnalyzerError",
+    "AnalyzerExecution",
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",
@@ -61,6 +69,8 @@ __all__ = [
     "Severity",
     "StringEncoding",
     "StringsAnalysisData",
+    "ThreatAssessment",
+    "ThreatClassification",
     "YaraRuleMatch",
     "YaraStringMatch",
 ]
