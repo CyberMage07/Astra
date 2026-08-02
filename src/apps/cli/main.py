@@ -32,6 +32,17 @@ app = typer.Typer(
 console = Console()
 
 
+def _handle_path_error(error: FileNotFoundError | ValueError) -> None:
+    """Display a clean CLI message for invalid sample paths."""
+    if isinstance(error, FileNotFoundError):
+        missing_path = error.filename or str(error)
+        console.print(f"[bold red]Error:[/bold red] File does not exist: {missing_path}")
+    else:
+        console.print(f"[bold red]Error:[/bold red] {error}")
+
+    raise typer.Exit(code=1) from error
+
+
 def get_version() -> str:
     """Return the installed Astra version."""
     try:
@@ -97,7 +108,10 @@ def ingest(sample: Path) -> None:
 @app.command()
 def analyze(sample: Path) -> None:
     """Run Astra's unified static-analysis pipeline."""
-    report = AnalysisOrchestrator().analyze(sample)
+    try:
+        report = AnalysisOrchestrator().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
 
     summary = Table(title="Astra Unified Analysis", show_header=False)
     summary.add_column("Field", style="cyan")
@@ -438,7 +452,10 @@ def entropy(
 @app.command()
 def signature(sample: Path) -> None:
     """Analyze PE Authenticode signatures and certificates."""
-    result = SignatureAnalyzer().analyze(sample)
+    try:
+        result = SignatureAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
 
     if result.status is not AnalysisStatus.COMPLETED:
         message = result.errors[0].message if result.errors else "Unknown signature-analysis error"
@@ -656,7 +673,10 @@ def pe(sample: Path) -> None:
 @app.command()
 def metadata(sample: Path) -> None:
     """Extract normalized PE metadata."""
-    result = MetadataAnalyzer().analyze(sample)
+    try:
+        result = MetadataAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
 
     if result.status is not AnalysisStatus.COMPLETED:
         message = result.errors[0].message if result.errors else "Unknown metadata-analysis error"
