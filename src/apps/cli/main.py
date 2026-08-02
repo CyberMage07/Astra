@@ -10,6 +10,7 @@ from rich.table import Table
 
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
+from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
@@ -448,6 +449,94 @@ def imports(sample: Path) -> None:
         )
 
     console.print(behaviors)
+
+
+@app.command()
+def packer(sample: Path) -> None:
+    """Detect PE packing and executable protection indicators."""
+    analyzer = PackerAnalyzer()
+    result = analyzer.analyze(sample)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown packer-analysis error"
+        console.print(f"[bold red]Packer analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(title="Packer Detection", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row(
+        "Likely packed",
+        "[bold red]Yes[/bold red]" if data["is_likely_packed"] else "[green]No[/green]",
+    )
+    summary.add_row("Confidence", f"{data['confidence']}%")
+    summary.add_row("Detected packer", str(data["detected_packer"] or "Unknown"))
+    summary.add_row("High-entropy sections", str(data["high_entropy_sections"]))
+    summary.add_row(
+        "RWX sections",
+        str(data["executable_writable_sections"]),
+    )
+    summary.add_row(
+        "Suspicious section names",
+        str(data["suspicious_section_names"]),
+    )
+    summary.add_row("Import count", str(data["import_count"]))
+    summary.add_row("Overlay size", f"{int(data['overlay_size']):,} bytes")
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    if not data["indicators"]:
+        console.print("[green]No packing indicators detected.[/green]")
+        return
+
+    indicators = Table(title=f"Packer Indicators ({len(data['indicators'])})")
+    indicators.add_column("Severity", justify="center")
+    indicators.add_column("Type", style="cyan")
+    indicators.add_column("Value")
+    indicators.add_column("Location")
+    indicators.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for indicator in data["indicators"]:
+        severity = str(indicator["severity"])
+        style = severity_styles.get(severity, "white")
+
+        indicators.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            str(indicator["indicator_type"]),
+            str(indicator["value"]),
+            str(indicator["location"] or "-"),
+            f"{indicator['confidence']}%",
+        )
+
+    console.print(indicators)
+
+    if data["candidates"]:
+        candidates = Table(title="Packer Candidates")
+        candidates.add_column("Packer", style="cyan")
+        candidates.add_column("Confidence", justify="right")
+        candidates.add_column("Indicators", justify="right")
+
+        for candidate in data["candidates"]:
+            candidates.add_row(
+                str(candidate["name"]),
+                f"{candidate['confidence']}%",
+                str(len(candidate["indicators"])),
+            )
+
+        console.print(candidates)
 
 
 @app.command()

@@ -15,6 +15,11 @@ from packages.schemas.imports import (
     ImportBehaviorSummary,
     ImportIndicator,
 )
+from packages.schemas.packer import (
+    PackerAnalysisData,
+    PackerCandidate,
+    PackerIndicator,
+)
 from packages.schemas.pe import (
     PEAnalysisData,
     PEExport,
@@ -49,6 +54,9 @@ __all__ = [
     "PEHeaderInfo",
     "PEImport",
     "PESection",
+    "PackerAnalysisData",
+    "PackerCandidate",
+    "PackerIndicator",
     "SampleMetadata",
     "Severity",
     "StringEncoding",
