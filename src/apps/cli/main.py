@@ -14,6 +14,7 @@ from analyzers.ioc import IOCAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
 from analyzers.yara import YaraAnalyzer
@@ -432,6 +433,106 @@ def entropy(
         )
 
     console.print(findings)
+
+
+@app.command()
+def signature(sample: Path) -> None:
+    """Analyze PE Authenticode signatures and certificates."""
+    result = SignatureAnalyzer().analyze(sample)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown signature-analysis error"
+        console.print(f"[bold red]Signature analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="Digital Signature Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row("Status", str(data["status"]).upper())
+    summary.add_row(
+        "Signature present",
+        "Yes" if data["signature_present"] else "No",
+    )
+    summary.add_row(
+        "Signature valid",
+        (
+            "Unknown"
+            if data["signature_valid"] is None
+            else "Yes"
+            if data["signature_valid"]
+            else "No"
+        ),
+    )
+    summary.add_row(
+        "Trust verified",
+        (
+            "Unknown"
+            if data["trust_verified"] is None
+            else "Yes"
+            if data["trust_verified"]
+            else "No"
+        ),
+    )
+    summary.add_row("Signer count", str(data["signer_count"]))
+    summary.add_row(
+        "Timestamp present",
+        "Yes" if data["timestamp_present"] else "No",
+    )
+    summary.add_row(
+        "Digest",
+        str(data["digest_algorithm"] or "Unknown"),
+    )
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    if data["certificates"]:
+        certificates = Table(title=f"Certificates ({len(data['certificates'])})")
+        certificates.add_column("Subject")
+        certificates.add_column("Issuer")
+        certificates.add_column("Valid until")
+        certificates.add_column("Expired", justify="center")
+        certificates.add_column("Self-signed", justify="center")
+
+        for certificate in data["certificates"]:
+            certificates.add_row(
+                str(certificate["subject"] or "Unknown"),
+                str(certificate["issuer"] or "Unknown"),
+                str(certificate["valid_until"] or "Unknown"),
+                "Yes" if certificate["is_expired"] else "No",
+                "Yes" if certificate["is_self_signed"] else "No",
+            )
+
+        console.print(certificates)
+    elif data["signature_present"]:
+        console.print("[yellow]Signature present, but no certificates were parsed.[/yellow]")
+    else:
+        console.print("[yellow]The PE file is unsigned.[/yellow]")
+
+    if data["verification_error"]:
+        console.print(f"[yellow]Verification note:[/yellow] {data['verification_error']}")
+
+    if result.findings:
+        findings = Table(title="Signature Findings")
+        findings.add_column("Severity", justify="center")
+        findings.add_column("Finding")
+        findings.add_column("Confidence", justify="right")
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
 
 
 @app.command()

@@ -45,6 +45,11 @@ from packages.schemas.report import (
     ThreatClassification,
 )
 from packages.schemas.sample import FileHashes, SampleMetadata
+from packages.schemas.signature import (
+    CertificateInfo,
+    SignatureAnalysisData,
+    SignatureStatus,
+)
 from packages.schemas.strings import (
     ExtractedString,
     StringEncoding,
@@ -58,6 +63,7 @@ __all__ = [
     "AnalysisStatus",
     "AnalyzerError",
     "AnalyzerExecution",
+    "CertificateInfo",
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",
@@ -85,6 +91,8 @@ __all__ = [
     "PackerIndicator",
     "SampleMetadata",
     "Severity",
+    "SignatureAnalysisData",
+    "SignatureStatus",
     "StringEncoding",
     "StringsAnalysisData",
     "ThreatAssessment",

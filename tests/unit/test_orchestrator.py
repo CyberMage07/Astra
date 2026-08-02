@@ -70,6 +70,7 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
         _completed_result("yara"),
         _completed_result("pe"),
         _completed_result("metadata"),
+        _completed_result("signature"),
         _completed_result("imports"),
         _completed_result("packer"),
     )
@@ -93,11 +94,11 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
 
     assert report.original_name == "sample.exe"
     assert report.file_type.detected_family == "pe"
-    assert len(report.analyzer_results) == 8
-    assert report.completed_analyzers == 8
+    assert len(report.analyzer_results) == 9
+    assert report.completed_analyzers == 9
     assert report.failed_analyzers == 0
     assert report.findings == (finding,)
-    assert len(report.analyzer_executions) == 8
+    assert len(report.analyzer_executions) == 9
 
 
 def test_orchestrator_counts_failed_analyzers(tmp_path: Path) -> None:
