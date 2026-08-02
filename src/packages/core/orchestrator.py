@@ -20,6 +20,7 @@ from packages.schemas import (
     AnalyzerExecution,
     Finding,
 )
+from rules.scoring import assess_findings
 
 
 class AnalysisOrchestrator:
@@ -103,6 +104,7 @@ class AnalysisOrchestrator:
 
         executions = self._build_executions(analyzer_results)
         findings = self._collect_findings(analyzer_results)
+        assessment = assess_findings(findings)
 
         completed_analyzers = sum(
             1 for result in analyzer_results if result.status is AnalysisStatus.COMPLETED
@@ -129,6 +131,7 @@ class AnalysisOrchestrator:
             analyzer_results=analyzer_results,
             analyzer_executions=executions,
             findings=findings,
+            assessment=assessment,
             completed_analyzers=completed_analyzers,
             failed_analyzers=failed_analyzers,
             total_duration_ms=total_duration_ms,

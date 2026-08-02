@@ -113,6 +113,45 @@ def analyze(sample: Path) -> None:
     summary.add_row("Duration", f"{report.total_duration_ms} ms")
 
     console.print(summary)
+    if report.assessment is not None:
+        assessment = report.assessment
+
+        classification_styles = {
+            "likely-benign": "green",
+            "low-risk": "green",
+            "suspicious": "yellow",
+            "high-risk": "red",
+            "highly-suspicious": "bold white on red",
+        }
+
+        classification = assessment.classification.value
+        style = classification_styles.get(classification, "white")
+
+        verdict = Table(title="Threat Assessment", show_header=False)
+        verdict.add_column("Field", style="cyan")
+        verdict.add_column("Value")
+
+        verdict.add_row(
+            "Classification",
+            f"[{style}]{classification.upper()}[/{style}]",
+        )
+        verdict.add_row("Risk score", f"{assessment.score} / 100")
+        verdict.add_row("Confidence", f"{assessment.confidence}%")
+        verdict.add_row(
+            "MITRE ATT&CK",
+            ", ".join(assessment.attack_techniques) or "None",
+        )
+
+        console.print(verdict)
+
+        if assessment.reasons:
+            reasons = Table(title="Assessment Reasons")
+            reasons.add_column("Reason")
+
+            for reason in assessment.reasons:
+                reasons.add_row(reason)
+
+            console.print(reasons)
 
     executions = Table(title="Analyzer Execution")
     executions.add_column("Analyzer", style="cyan")
