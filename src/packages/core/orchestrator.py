@@ -8,6 +8,7 @@ from pathlib import Path
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.hashing import calculate_hashes
+from analyzers.ioc import IOCAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -40,6 +41,7 @@ class AnalysisOrchestrator:
 
         general_analyzers = (
             StringsAnalyzer(),
+            IOCAnalyzer(),
             EntropyAnalyzer(),
             YaraAnalyzer(self.rules_root),
         )
@@ -83,7 +85,10 @@ class AnalysisOrchestrator:
         """Collect findings from all analyzer results."""
         return tuple(finding for result in results for finding in result.findings)
 
-    def analyze(self, sample_path: Path) -> AnalysisReport:
+    def analyze(
+        self,
+        sample_path: Path,
+    ) -> AnalysisReport:
         """Run Astra's unified static-analysis pipeline."""
         start = time.perf_counter()
         resolved_path = sample_path.expanduser().resolve()

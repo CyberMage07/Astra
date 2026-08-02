@@ -15,6 +15,12 @@ from packages.schemas.imports import (
     ImportBehaviorSummary,
     ImportIndicator,
 )
+from packages.schemas.ioc import (
+    IOCAnalysisData,
+    IOCIndicator,
+    IOCSummary,
+    IOCType,
+)
 from packages.schemas.packer import (
     PackerAnalysisData,
     PackerCandidate,
@@ -54,6 +60,10 @@ __all__ = [
     "FileHashes",
     "FileTypeResult",
     "Finding",
+    "IOCAnalysisData",
+    "IOCIndicator",
+    "IOCSummary",
+    "IOCType",
     "ImportAnalysisData",
     "ImportBehaviorSummary",
     "ImportIndicator",

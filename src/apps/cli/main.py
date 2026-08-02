@@ -10,6 +10,7 @@ from rich.table import Table
 
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
+from analyzers.ioc import IOCAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -291,6 +292,70 @@ def strings(
             f"[dim]Showing the first {len(extracted)} of "
             f"{data['total_count']} extracted strings.[/dim]"
         )
+
+
+@app.command()
+def ioc(sample: Path) -> None:
+    """Extract actionable indicators of compromise."""
+    result = IOCAnalyzer().analyze(sample)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown IOC analysis error"
+        console.print(f"[bold red]IOC analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(title="IOC Extraction", show_header=False)
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row("Sample", str(sample.expanduser().resolve()))
+    summary.add_row("Total indicators", str(data["total_indicators"]))
+    summary.add_row("Unique indicators", str(data["unique_indicators"]))
+    summary.add_row("Categories", str(len(data["summaries"])))
+    summary.add_row("Duration", f"{result.duration_ms} ms")
+
+    console.print(summary)
+
+    if not data["indicators"]:
+        console.print("[green]No indicators of compromise detected.[/green]")
+        return
+
+    indicators = Table(title=f"Indicators ({len(data['indicators'])})")
+    indicators.add_column("Type", style="cyan")
+    indicators.add_column("Value")
+    indicators.add_column("Offset", justify="right")
+    indicators.add_column("Confidence", justify="right")
+
+    for indicator in data["indicators"]:
+        offset = indicator["offset"]
+
+        indicators.add_row(
+            str(indicator["indicator_type"]),
+            str(indicator["value"]),
+            f"0x{int(offset):x}" if offset is not None else "-",
+            f"{indicator['confidence']}%",
+        )
+
+    console.print(indicators)
+
+    if result.findings:
+        findings = Table(title="IOC Findings")
+        findings.add_column("Severity", justify="center")
+        findings.add_column("Finding", style="cyan")
+        findings.add_column("Confidence", justify="right")
+        findings.add_column("Evidence", justify="right")
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.title,
+                f"{finding.confidence}%",
+                str(len(finding.evidence)),
+            )
+
+        console.print(findings)
 
 
 @app.command()

@@ -65,6 +65,7 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
 
     results = (
         _completed_result("strings"),
+        _completed_result("ioc"),
         _completed_result("entropy", findings=(finding,)),
         _completed_result("yara"),
         _completed_result("pe"),
@@ -91,11 +92,11 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
 
     assert report.original_name == "sample.exe"
     assert report.file_type.detected_family == "pe"
-    assert len(report.analyzer_results) == 6
-    assert report.completed_analyzers == 6
+    assert len(report.analyzer_results) == 7
+    assert report.completed_analyzers == 7
     assert report.failed_analyzers == 0
     assert report.findings == (finding,)
-    assert len(report.analyzer_executions) == 6
+    assert len(report.analyzer_executions) == 7
 
 
 def test_orchestrator_counts_failed_analyzers(tmp_path: Path) -> None:
