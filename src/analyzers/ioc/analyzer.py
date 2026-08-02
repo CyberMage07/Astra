@@ -169,8 +169,6 @@ def _valid_standalone_ipv4(
 
     return not (value.endswith(".0") and network_context is None)
 
-    return True
-
 
 def _valid_domain(
     value: str,
@@ -362,11 +360,11 @@ def _build_findings(
 
         findings.append(
             Finding(
-                title="Suspicious command or system indicators detected",
+                title=("Suspicious command or system indicators detected"),
                 description=(
-                    f"Astra extracted {len(suspicious_indicators)} indicators "
-                    "associated with command execution, registry access, or "
-                    "network-share activity."
+                    f"Astra extracted {len(suspicious_indicators)} "
+                    "indicators associated with command execution, "
+                    "registry access, or network-share activity."
                 ),
                 category="ioc",
                 severity=Severity.MEDIUM,
@@ -383,7 +381,11 @@ def _build_findings(
                     )
                     for indicator in representative
                 ),
-                tags=("ioc", "static-analysis", "behavior"),
+                tags=(
+                    "ioc",
+                    "static-analysis",
+                    "behavior",
+                ),
             )
         )
 
@@ -394,9 +396,10 @@ def _build_findings(
             Finding(
                 title="Multiple network indicators detected",
                 description=(
-                    f"Astra extracted {len(network_indicators)} URLs, domains, "
-                    "or IP addresses from readable sample content. These "
-                    "indicators require contextual review."
+                    f"Astra extracted {len(network_indicators)} "
+                    "URLs, domains, or IP addresses from readable "
+                    "sample content. These indicators require "
+                    "contextual review."
                 ),
                 category="network-ioc",
                 severity=Severity.LOW,
@@ -413,53 +416,15 @@ def _build_findings(
                     )
                     for indicator in representative
                 ),
-                tags=("ioc", "network", "static-analysis"),
+                tags=(
+                    "ioc",
+                    "network",
+                    "static-analysis",
+                ),
             )
         )
 
     return tuple(findings)
-
-    high_value_types = {
-        IOCType.URL,
-        IOCType.IPV4,
-        IOCType.POWERSHELL,
-        IOCType.CMD,
-        IOCType.UNC_PATH,
-        IOCType.REGISTRY_PATH,
-    }
-
-    high_value = tuple(
-        indicator for indicator in indicators if indicator.indicator_type in high_value_types
-    )
-
-    if not high_value:
-        return ()
-
-    representative = high_value[:20]
-
-    return (
-        Finding(
-            title="Actionable indicators of compromise detected",
-            description=(
-                f"Astra extracted {len(high_value)} high-value IOC entries "
-                "from readable sample content."
-            ),
-            category="ioc",
-            severity=Severity.MEDIUM,
-            confidence=80,
-            evidence=tuple(
-                Evidence(
-                    kind=indicator.indicator_type.value,
-                    value=indicator.value,
-                    location=(
-                        f"offset 0x{indicator.offset:x}" if indicator.offset is not None else None
-                    ),
-                )
-                for indicator in representative
-            ),
-            tags=("ioc", "static-analysis"),
-        ),
-    )
 
 
 class IOCAnalyzer:
@@ -498,13 +463,14 @@ class IOCAnalyzer:
         """Return whether this analyzer supports the file family."""
         return family in self.supported_families
 
-    def analyze(self, sample_path: Path) -> AnalysisResult:
-        """Extract normalized indicators from a sample."""
-        started_at = datetime.now(UTC)
-        start = time.perf_counter()
-
-        strings_result = self.strings_analyzer.analyze(sample_path)
-
+    def _analyze_strings_result(
+        self,
+        strings_result: AnalysisResult,
+        *,
+        started_at: datetime,
+        start: float,
+    ) -> AnalysisResult:
+        """Extract IOCs from an existing strings-analysis result."""
         if strings_result.status is not AnalysisStatus.COMPLETED:
             return AnalysisResult(
                 analyzer=self.name,
@@ -515,14 +481,28 @@ class IOCAnalyzer:
                 errors=strings_result.errors,
             )
 
-        raw_strings = strings_result.data["strings"]
+        raw_strings = strings_result.data.get(
+            "strings",
+            [],
+        )
         indicators: list[IOCIndicator] = []
 
         for raw_string in raw_strings:
+            if not isinstance(raw_string, dict):
+                continue
+
+            value = raw_string.get("value")
+            offset = raw_string.get("offset")
+
+            if value is None:
+                continue
+
+            normalized_offset = int(offset) if offset is not None else None
+
             indicators.extend(
                 _extract_matches(
-                    str(raw_string["value"]),
-                    int(raw_string["offset"]),
+                    str(value),
+                    normalized_offset,
                 )
             )
 
@@ -537,7 +517,6 @@ class IOCAnalyzer:
         )
 
         findings = _build_findings(unique_indicators)
-
         duration_ms = int((time.perf_counter() - start) * 1000)
 
         return AnalysisResult(
@@ -548,4 +527,34 @@ class IOCAnalyzer:
             duration_ms=duration_ms,
             findings=findings,
             data=analysis_data.model_dump(mode="json"),
+        )
+
+    def analyze_strings(
+        self,
+        strings_result: AnalysisResult,
+    ) -> AnalysisResult:
+        """Extract IOCs from a completed strings-analysis result."""
+        started_at = datetime.now(UTC)
+        start = time.perf_counter()
+
+        return self._analyze_strings_result(
+            strings_result,
+            started_at=started_at,
+            start=start,
+        )
+
+    def analyze(
+        self,
+        sample_path: Path,
+    ) -> AnalysisResult:
+        """Extract normalized indicators directly from a sample."""
+        started_at = datetime.now(UTC)
+        start = time.perf_counter()
+
+        strings_result = self.strings_analyzer.analyze(sample_path)
+
+        return self._analyze_strings_result(
+            strings_result,
+            started_at=started_at,
+            start=start,
         )

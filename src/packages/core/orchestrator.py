@@ -29,7 +29,10 @@ from rules.scoring import assess_findings
 class AnalysisOrchestrator:
     """Run relevant Astra analyzers and build one unified report."""
 
-    def __init__(self, rules_root: Path = Path("rules/yara")) -> None:
+    def __init__(
+        self,
+        rules_root: Path = Path("rules/yara"),
+    ) -> None:
         """Initialize the orchestrator."""
         self.rules_root = rules_root.expanduser().resolve()
 
@@ -41,9 +44,17 @@ class AnalysisOrchestrator:
         """Run analyzers relevant to the detected file family."""
         results: list[AnalysisResult] = []
 
+        strings_analyzer = StringsAnalyzer()
+        ioc_analyzer = IOCAnalyzer()
+
+        if strings_analyzer.supports(family):
+            strings_result = strings_analyzer.analyze(sample_path)
+            results.append(strings_result)
+
+            if ioc_analyzer.supports(family):
+                results.append(ioc_analyzer.analyze_strings(strings_result))
+
         general_analyzers = (
-            StringsAnalyzer(),
-            IOCAnalyzer(),
             EntropyAnalyzer(),
             YaraAnalyzer(self.rules_root),
         )

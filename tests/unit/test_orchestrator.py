@@ -31,7 +31,9 @@ def _completed_result(
     )
 
 
-def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
+def test_orchestrator_runs_pe_pipeline(
+    tmp_path: Path,
+) -> None:
     """PE samples should trigger all relevant analyzers."""
     sample = tmp_path / "sample.exe"
     sample.write_bytes(b"MZ")
@@ -39,7 +41,7 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
     file_type = FileTypeResult(
         file_name="sample.exe",
         extension=".exe",
-        mime_type="application/vnd.microsoft.portable-executable",
+        mime_type=("application/vnd.microsoft.portable-executable"),
         magic_description="PE32 executable",
         detected_family="pe",
         extension_matches=True,
@@ -66,11 +68,14 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
     results = (
         _completed_result("strings"),
         _completed_result("ioc"),
-        _completed_result("entropy", findings=(finding,)),
+        _completed_result(
+            "entropy",
+            findings=(finding,),
+        ),
         _completed_result("yara"),
         _completed_result("pe"),
-        _completed_result("metadata"),
         _completed_result("signature"),
+        _completed_result("metadata"),
         _completed_result("imports"),
         _completed_result("packer"),
     )
@@ -101,7 +106,51 @@ def test_orchestrator_runs_pe_pipeline(tmp_path: Path) -> None:
     assert len(report.analyzer_executions) == 9
 
 
-def test_orchestrator_counts_failed_analyzers(tmp_path: Path) -> None:
+def test_orchestrator_reuses_strings_result(
+    tmp_path: Path,
+) -> None:
+    """IOC analysis should reuse the existing strings result."""
+    sample = tmp_path / "sample.bin"
+    sample.write_bytes(b"data")
+
+    strings_result = _completed_result("strings")
+    ioc_result = _completed_result("ioc")
+
+    with (
+        patch("packages.core.orchestrator.StringsAnalyzer") as strings_class,
+        patch("packages.core.orchestrator.IOCAnalyzer") as ioc_class,
+        patch("packages.core.orchestrator.EntropyAnalyzer") as entropy_class,
+        patch("packages.core.orchestrator.YaraAnalyzer") as yara_class,
+    ):
+        strings_analyzer = strings_class.return_value
+        strings_analyzer.supports.return_value = True
+        strings_analyzer.analyze.return_value = strings_result
+
+        ioc_analyzer = ioc_class.return_value
+        ioc_analyzer.supports.return_value = True
+        ioc_analyzer.analyze_strings.return_value = ioc_result
+
+        entropy_class.return_value.supports.return_value = False
+        yara_class.return_value.supports.return_value = False
+
+        results = AnalysisOrchestrator(tmp_path / "rules")._run_analyzers(
+            sample,
+            "unknown",
+        )
+
+    assert results == (
+        strings_result,
+        ioc_result,
+    )
+
+    strings_analyzer.analyze.assert_called_once_with(sample)
+    ioc_analyzer.analyze_strings.assert_called_once_with(strings_result)
+    ioc_analyzer.analyze.assert_not_called()
+
+
+def test_orchestrator_counts_failed_analyzers(
+    tmp_path: Path,
+) -> None:
     """Failed and partial analyzer results should be counted."""
     sample = tmp_path / "sample.bin"
     sample.write_bytes(b"data")
@@ -162,13 +211,20 @@ def test_orchestrator_counts_failed_analyzers(tmp_path: Path) -> None:
     assert report.failed_analyzers == 2
 
 
-def test_orchestrator_rejects_missing_file(tmp_path: Path) -> None:
+def test_orchestrator_rejects_missing_file(
+    tmp_path: Path,
+) -> None:
     """Missing samples should raise FileNotFoundError."""
     with pytest.raises(FileNotFoundError):
         AnalysisOrchestrator().analyze(tmp_path / "missing.bin")
 
 
-def test_orchestrator_rejects_directory(tmp_path: Path) -> None:
+def test_orchestrator_rejects_directory(
+    tmp_path: Path,
+) -> None:
     """Directories should not be accepted as samples."""
-    with pytest.raises(ValueError, match="regular file"):
+    with pytest.raises(
+        ValueError,
+        match="regular file",
+    ):
         AnalysisOrchestrator().analyze(tmp_path)
