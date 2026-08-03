@@ -45,6 +45,10 @@ from packages.schemas.report import (
     ThreatClassification,
 )
 from packages.schemas.sample import FileHashes, SampleMetadata
+from packages.schemas.sections import (
+    SectionAnalysisData,
+    SectionInfo,
+)
 from packages.schemas.signature import (
     CertificateInfo,
     SignatureAnalysisData,
@@ -90,6 +94,8 @@ __all__ = [
     "PackerCandidate",
     "PackerIndicator",
     "SampleMetadata",
+    "SectionAnalysisData",
+    "SectionInfo",
     "Severity",
     "SignatureAnalysisData",
     "SignatureStatus",

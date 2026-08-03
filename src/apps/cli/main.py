@@ -14,6 +14,7 @@ from analyzers.ioc import IOCAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
@@ -550,6 +551,179 @@ def signature(sample: Path) -> None:
             )
 
         console.print(findings)
+
+
+@app.command()
+def sections(sample: Path) -> None:
+    """Analyze PE sections, permissions, entropy, and layout."""
+    try:
+        result = SectionsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown section-analysis error"
+        console.print(f"[bold red]Section analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Section Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Sections",
+        str(data["section_count"]),
+    )
+    summary.add_row(
+        "High entropy",
+        str(data["high_entropy_sections"]),
+    )
+    summary.add_row(
+        "Executable",
+        str(data["executable_sections"]),
+    )
+    summary.add_row(
+        "Writable",
+        str(data["writable_sections"]),
+    )
+    summary.add_row(
+        "RWX",
+        str(data["rwx_sections"]),
+    )
+    summary.add_row(
+        "W+X",
+        str(data["wx_sections"]),
+    )
+    summary.add_row(
+        "Suspicious names",
+        str(data["suspicious_name_sections"]),
+    )
+    summary.add_row(
+        "Empty executable",
+        str(data["empty_executable_sections"]),
+    )
+    summary.add_row(
+        "Layout anomalies",
+        str(data["virtual_raw_anomalies"]),
+    )
+    summary.add_row(
+        "Executable resources",
+        str(data["executable_resource_sections"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    section_table = Table(title=f"Sections ({len(data['sections'])})")
+    section_table.add_column(
+        "Name",
+        style="cyan",
+    )
+    section_table.add_column(
+        "RVA",
+        justify="right",
+    )
+    section_table.add_column(
+        "Virtual",
+        justify="right",
+    )
+    section_table.add_column(
+        "Raw",
+        justify="right",
+    )
+    section_table.add_column(
+        "Entropy",
+        justify="right",
+    )
+    section_table.add_column(
+        "Permissions",
+        justify="center",
+    )
+    section_table.add_column(
+        "Flags",
+    )
+
+    for section in data["sections"]:
+        permissions = "".join(
+            (
+                "R" if section["readable"] else "-",
+                "W" if section["writable"] else "-",
+                "X" if section["executable"] else "-",
+            )
+        )
+
+        flags: list[str] = []
+
+        if section["is_rwx"]:
+            flags.append("RWX")
+
+        if section["is_suspicious_name"]:
+            flags.append("Suspicious name")
+
+        if section["has_virtual_raw_anomaly"]:
+            flags.append("Layout anomaly")
+
+        if section["is_executable_resource"]:
+            flags.append("Executable resource")
+
+        section_table.add_row(
+            str(section["name"]),
+            f"0x{int(section['virtual_address']):x}",
+            str(section["virtual_size"]),
+            str(section["raw_size"]),
+            f"{float(section['entropy']):.2f}",
+            permissions,
+            ", ".join(flags) or "-",
+        )
+
+    console.print(section_table)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE section indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Section Findings ({len(result.findings)})")
+    findings.add_column(
+        "Severity",
+        justify="center",
+    )
+    findings.add_column(
+        "Category",
+        style="cyan",
+    )
+    findings.add_column(
+        "Finding",
+    )
+    findings.add_column(
+        "Confidence",
+        justify="right",
+    )
+    findings.add_column(
+        "MITRE",
+    )
+
+    for finding in result.findings:
+        findings.add_row(
+            finding.severity.value.upper(),
+            finding.category,
+            finding.title,
+            f"{finding.confidence}%",
+            ", ".join(finding.attack_techniques) or "-",
+        )
+
+    console.print(findings)
 
 
 @app.command()

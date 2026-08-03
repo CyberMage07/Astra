@@ -12,6 +12,7 @@ from analyzers.ioc import IOCAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
@@ -66,6 +67,7 @@ class AnalysisOrchestrator:
         if family == "pe":
             pe_analyzers = (
                 PEAnalyzer(),
+                SectionsAnalyzer(),
                 SignatureAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
