@@ -14,6 +14,7 @@ from analyzers.ioc import IOCAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.resources import ResourcesAnalyzer
 from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -713,6 +714,148 @@ def sections(sample: Path) -> None:
     findings.add_column(
         "MITRE",
     )
+
+    for finding in result.findings:
+        findings.add_row(
+            finding.severity.value.upper(),
+            finding.category,
+            finding.title,
+            f"{finding.confidence}%",
+            ", ".join(finding.attack_techniques) or "-",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def resources(sample: Path) -> None:
+    """Analyze PE resources and embedded payloads."""
+    try:
+        result = ResourcesAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown resource-analysis error"
+        console.print(f"[bold red]Resource analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Resource Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Resources",
+        str(data["resource_count"]),
+    )
+    summary.add_row(
+        "Icons",
+        str(data["icon_count"]),
+    )
+    summary.add_row(
+        "Manifests",
+        str(data["manifest_count"]),
+    )
+    summary.add_row(
+        "Versions",
+        str(data["version_count"]),
+    )
+    summary.add_row(
+        "RCDATA",
+        str(data["rcdata_count"]),
+    )
+    summary.add_row(
+        "High entropy",
+        str(data["high_entropy_resources"]),
+    )
+    summary.add_row(
+        "Embedded executables",
+        str(data["embedded_executables"]),
+    )
+    summary.add_row(
+        "Embedded archives",
+        str(data["embedded_archives"]),
+    )
+    summary.add_row(
+        "Embedded documents",
+        str(data["embedded_documents"]),
+    )
+    summary.add_row(
+        "Total resource bytes",
+        f"{int(data['total_resource_bytes']):,}",
+    )
+    summary.add_row(
+        "Largest resource",
+        f"{int(data['largest_resource_size']):,} bytes",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    resource_table = Table(title=f"Resources ({len(data['resources'])})")
+    resource_table.add_column("Type", style="cyan")
+    resource_table.add_column("Name")
+    resource_table.add_column("Language")
+    resource_table.add_column(
+        "RVA",
+        justify="right",
+    )
+    resource_table.add_column(
+        "Size",
+        justify="right",
+    )
+    resource_table.add_column(
+        "Entropy",
+        justify="right",
+    )
+    resource_table.add_column("Embedded")
+    resource_table.add_column("SHA-256")
+
+    for resource in data["resources"]:
+        resource_table.add_row(
+            str(resource["resource_type"]),
+            str(resource["name"] or "-"),
+            str(resource["language"] or "-"),
+            f"0x{int(resource['rva']):x}",
+            f"{int(resource['size']):,}",
+            f"{float(resource['entropy']):.2f}",
+            str(resource["embedded_file_type"] or "-"),
+            str(resource["sha256"])[:16] + "…",
+        )
+
+    console.print(resource_table)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE resource indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Resource Findings ({len(result.findings)})")
+    findings.add_column(
+        "Severity",
+        justify="center",
+    )
+    findings.add_column(
+        "Category",
+        style="cyan",
+    )
+    findings.add_column("Finding")
+    findings.add_column(
+        "Confidence",
+        justify="right",
+    )
+    findings.add_column("MITRE")
 
     for finding in result.findings:
         findings.add_row(

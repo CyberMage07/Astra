@@ -44,6 +44,11 @@ from packages.schemas.report import (
     ThreatAssessment,
     ThreatClassification,
 )
+from packages.schemas.resources import (
+    ResourceAnalysisData,
+    ResourceEntry,
+    ResourceType,
+)
 from packages.schemas.sample import FileHashes, SampleMetadata
 from packages.schemas.sections import (
     SectionAnalysisData,
@@ -93,6 +98,9 @@ __all__ = [
     "PackerAnalysisData",
     "PackerCandidate",
     "PackerIndicator",
+    "ResourceAnalysisData",
+    "ResourceEntry",
+    "ResourceType",
     "SampleMetadata",
     "SectionAnalysisData",
     "SectionInfo",

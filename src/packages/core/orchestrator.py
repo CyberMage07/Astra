@@ -12,6 +12,7 @@ from analyzers.ioc import IOCAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.resources import ResourcesAnalyzer
 from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -69,6 +70,7 @@ class AnalysisOrchestrator:
                 PEAnalyzer(),
                 SectionsAnalyzer(),
                 SignatureAnalyzer(),
+                ResourcesAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
