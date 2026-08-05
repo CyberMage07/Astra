@@ -10,6 +10,7 @@ from analyzers.filetype import identify_file
 from analyzers.hashing import calculate_hashes
 from analyzers.ioc import IOCAnalyzer
 from analyzers.metadata import MetadataAnalyzer
+from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.resources import ResourcesAnalyzer
@@ -69,8 +70,9 @@ class AnalysisOrchestrator:
             pe_analyzers = (
                 PEAnalyzer(),
                 SectionsAnalyzer(),
-                SignatureAnalyzer(),
                 ResourcesAnalyzer(),
+                OverlayAnalyzer(),
+                SignatureAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),

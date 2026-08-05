@@ -26,6 +26,7 @@ from packages.schemas.metadata import (
     MetadataEntry,
     MetadataSource,
 )
+from packages.schemas.overlay import OverlayAnalysisData
 from packages.schemas.packer import (
     PackerAnalysisData,
     PackerCandidate,
@@ -64,6 +65,14 @@ from packages.schemas.strings import (
     StringEncoding,
     StringsAnalysisData,
 )
+from packages.schemas.tls import (
+    TLSAnalysisData,
+    TLSCallbackEntry,
+)
+from packages.schemas.versioninfo import (
+    VersionInfoAnalysisData,
+    VersionStringEntry,
+)
 from packages.schemas.yara import YaraRuleMatch, YaraStringMatch
 
 __all__ = [
@@ -90,6 +99,7 @@ __all__ = [
     "MetadataAnalysisData",
     "MetadataEntry",
     "MetadataSource",
+    "OverlayAnalysisData",
     "PEAnalysisData",
     "PEExport",
     "PEHeaderInfo",
@@ -109,8 +119,12 @@ __all__ = [
     "SignatureStatus",
     "StringEncoding",
     "StringsAnalysisData",
+    "TLSAnalysisData",
+    "TLSCallbackEntry",
     "ThreatAssessment",
     "ThreatClassification",
+    "VersionInfoAnalysisData",
+    "VersionStringEntry",
     "YaraRuleMatch",
     "YaraStringMatch",
 ]
