@@ -54,7 +54,10 @@ SECTION_EXECUTE = 0x20000000
 SECTION_READ = 0x40000000
 SECTION_WRITE = 0x80000000
 
-SUSPICIOUS_IMPORTS: dict[str, tuple[str, Severity, str]] = {
+SUSPICIOUS_IMPORTS: dict[
+    str,
+    tuple[str, Severity, str],
+] = {
     "CreateRemoteThread": (
         "process-injection",
         Severity.HIGH,
@@ -133,20 +136,32 @@ SUSPICIOUS_IMPORTS: dict[str, tuple[str, Severity, str]] = {
 }
 
 
-def _decode_name(value: bytes | None) -> str | None:
+def _decode_name(
+    value: bytes | None,
+) -> str | None:
     """Decode a PE byte string safely."""
     if value is None:
         return None
 
-    return value.decode("utf-8", errors="replace").rstrip("\x00")
+    return value.decode(
+        "utf-8",
+        errors="replace",
+    ).rstrip("\x00")
 
 
-def _architecture_bits(pe: pefile.PE) -> int:
+def _architecture_bits(
+    pe: pefile.PE,
+) -> int:
     """Return the executable architecture width."""
-    return 64 if pe.PE_TYPE == pefile.OPTIONAL_HEADER_MAGIC_PE_PLUS else 32
+    if pe.PE_TYPE == pefile.OPTIONAL_HEADER_MAGIC_PE_PLUS:
+        return 64
+
+    return 32
 
 
-def _extract_sections(pe: pefile.PE) -> tuple[PESection, ...]:
+def _extract_sections(
+    pe: pefile.PE,
+) -> tuple[PESection, ...]:
     """Extract normalized section information."""
     sections: list[PESection] = []
 
@@ -155,7 +170,7 @@ def _extract_sections(pe: pefile.PE) -> tuple[PESection, ...]:
 
         sections.append(
             PESection(
-                name=_decode_name(section.Name) or "(unnamed)",
+                name=(_decode_name(section.Name) or "(unnamed)"),
                 virtual_address=int(section.VirtualAddress),
                 virtual_size=int(section.Misc_VirtualSize),
                 raw_size=int(section.SizeOfRawData),
@@ -170,11 +185,17 @@ def _extract_sections(pe: pefile.PE) -> tuple[PESection, ...]:
     return tuple(sections)
 
 
-def _extract_imports(pe: pefile.PE) -> tuple[PEImport, ...]:
+def _extract_imports(
+    pe: pefile.PE,
+) -> tuple[PEImport, ...]:
     """Extract imported libraries and functions."""
     imports: list[PEImport] = []
 
-    for descriptor in getattr(pe, "DIRECTORY_ENTRY_IMPORT", ()):
+    for descriptor in getattr(
+        pe,
+        "DIRECTORY_ENTRY_IMPORT",
+        (),
+    ):
         library = _decode_name(descriptor.dll) or "(unknown)"
 
         for imported_symbol in descriptor.imports:
@@ -203,10 +224,16 @@ def _extract_imports(pe: pefile.PE) -> tuple[PEImport, ...]:
     return tuple(imports)
 
 
-def _extract_exports(pe: pefile.PE) -> tuple[PEExport, ...]:
+def _extract_exports(
+    pe: pefile.PE,
+) -> tuple[PEExport, ...]:
     """Extract exported symbols."""
     exports: list[PEExport] = []
-    export_directory = getattr(pe, "DIRECTORY_ENTRY_EXPORT", None)
+    export_directory = getattr(
+        pe,
+        "DIRECTORY_ENTRY_EXPORT",
+        None,
+    )
 
     if export_directory is None:
         return ()
@@ -223,7 +250,10 @@ def _extract_exports(pe: pefile.PE) -> tuple[PEExport, ...]:
     return tuple(exports)
 
 
-def _overlay_size(pe: pefile.PE, sample_path: Path) -> int:
+def _overlay_size(
+    pe: pefile.PE,
+    sample_path: Path,
+) -> int:
     """Calculate bytes appended beyond the parsed PE image."""
     overlay_offset = pe.get_overlay_data_start_offset()
 
@@ -231,20 +261,39 @@ def _overlay_size(pe: pefile.PE, sample_path: Path) -> int:
         return 0
 
     file_size = sample_path.stat().st_size
-    return max(0, file_size - int(overlay_offset))
+
+    return max(
+        0,
+        file_size - int(overlay_offset),
+    )
 
 
-def _has_tls_callbacks(pe: pefile.PE) -> bool:
+def _has_tls_callbacks(
+    pe: pefile.PE,
+) -> bool:
     """Return whether a TLS directory with callbacks exists."""
-    tls_directory = getattr(pe, "DIRECTORY_ENTRY_TLS", None)
+    tls_directory = getattr(
+        pe,
+        "DIRECTORY_ENTRY_TLS",
+        None,
+    )
 
     if tls_directory is None:
         return False
 
-    return bool(getattr(tls_directory.struct, "AddressOfCallBacks", 0))
+    return bool(
+        getattr(
+            tls_directory.struct,
+            "AddressOfCallBacks",
+            0,
+        )
+    )
 
 
-def _has_directory(pe: pefile.PE, directory_index: int) -> bool:
+def _has_directory(
+    pe: pefile.PE,
+    directory_index: int,
+) -> bool:
     """Return whether a PE data directory is populated."""
     directories = pe.OPTIONAL_HEADER.DATA_DIRECTORY
 
@@ -252,10 +301,14 @@ def _has_directory(pe: pefile.PE, directory_index: int) -> bool:
         return False
 
     directory = directories[directory_index]
+
     return bool(directory.VirtualAddress and directory.Size)
 
 
-def _build_data(pe: pefile.PE, sample_path: Path) -> PEAnalysisData:
+def _build_data(
+    pe: pefile.PE,
+    sample_path: Path,
+) -> PEAnalysisData:
     """Build normalized PE analysis data."""
     machine = MACHINE_TYPES.get(int(pe.FILE_HEADER.Machine))
 
@@ -263,7 +316,10 @@ def _build_data(pe: pefile.PE, sample_path: Path) -> PEAnalysisData:
         machine = f"Unknown (0x{int(pe.FILE_HEADER.Machine):04x})"
 
     subsystem_value = int(pe.OPTIONAL_HEADER.Subsystem)
-    subsystem = SUBSYSTEM_TYPES.get(subsystem_value, f"Unknown ({subsystem_value})")
+    subsystem = SUBSYSTEM_TYPES.get(
+        subsystem_value,
+        f"Unknown ({subsystem_value})",
+    )
     characteristics = int(pe.FILE_HEADER.Characteristics)
 
     header = PEHeaderInfo(
@@ -276,7 +332,7 @@ def _build_data(pe: pefile.PE, sample_path: Path) -> PEAnalysisData:
         number_of_sections=int(pe.FILE_HEADER.NumberOfSections),
         characteristics=characteristics,
         is_dll=bool(characteristics & IMAGE_FILE_DLL),
-        is_driver=subsystem_value == IMAGE_SUBSYSTEM_NATIVE,
+        is_driver=(subsystem_value == IMAGE_SUBSYSTEM_NATIVE),
     )
 
     return PEAnalysisData(
@@ -284,7 +340,10 @@ def _build_data(pe: pefile.PE, sample_path: Path) -> PEAnalysisData:
         sections=_extract_sections(pe),
         imports=_extract_imports(pe),
         exports=_extract_exports(pe),
-        overlay_size=_overlay_size(pe, sample_path),
+        overlay_size=_overlay_size(
+            pe,
+            sample_path,
+        ),
         has_tls_callbacks=_has_tls_callbacks(pe),
         has_debug_directory=_has_directory(
             pe,
@@ -301,7 +360,9 @@ def _build_data(pe: pefile.PE, sample_path: Path) -> PEAnalysisData:
     )
 
 
-def _build_findings(data: PEAnalysisData) -> tuple[Finding, ...]:
+def _build_findings(
+    data: PEAnalysisData,
+) -> tuple[Finding, ...]:
     """Generate explainable security findings from PE metadata."""
     findings: list[Finding] = []
 
@@ -315,7 +376,7 @@ def _build_findings(data: PEAnalysisData) -> tuple[Finding, ...]:
 
         findings.append(
             Finding(
-                title=f"Suspicious API import: {imported.function}",
+                title=(f"Suspicious API import: {imported.function}"),
                 description=description,
                 category=category,
                 severity=severity,
@@ -327,7 +388,11 @@ def _build_findings(data: PEAnalysisData) -> tuple[Finding, ...]:
                         location=imported.library,
                     ),
                 ),
-                tags=("windows", "pe", "import"),
+                tags=(
+                    "windows",
+                    "pe",
+                    "import",
+                ),
             )
         )
 
@@ -335,9 +400,10 @@ def _build_findings(data: PEAnalysisData) -> tuple[Finding, ...]:
         if section.entropy >= 7.2:
             findings.append(
                 Finding(
-                    title=f"High-entropy section: {section.name}",
+                    title=(f"High-entropy section: {section.name}"),
                     description=(
-                        "The section has unusually high entropy, which may indicate "
+                        "The section has unusually high "
+                        "entropy, which may indicate "
                         "compression, encryption, or packing."
                     ),
                     category="packing",
@@ -346,21 +412,27 @@ def _build_findings(data: PEAnalysisData) -> tuple[Finding, ...]:
                     evidence=(
                         Evidence(
                             kind="section-entropy",
-                            value=f"{section.entropy:.2f}",
+                            value=(f"{section.entropy:.2f}"),
                             location=section.name,
                         ),
                     ),
-                    tags=("pe", "entropy", "packing"),
+                    tags=(
+                        "pe",
+                        "entropy",
+                        "packing",
+                    ),
                 )
             )
 
         if section.executable and section.writable:
             findings.append(
                 Finding(
-                    title=f"Writable and executable section: {section.name}",
+                    title=(f"Writable and executable section: {section.name}"),
                     description=(
-                        "The section is writable and executable, which weakens memory "
-                        "protections and may support unpacking or injected code."
+                        "The section is writable and "
+                        "executable, which weakens memory "
+                        "protections and may support "
+                        "unpacking or injected code."
                     ),
                     category="memory-protection",
                     severity=Severity.HIGH,
@@ -372,31 +444,13 @@ def _build_findings(data: PEAnalysisData) -> tuple[Finding, ...]:
                             location=section.name,
                         ),
                     ),
-                    tags=("pe", "memory", "rwx"),
+                    tags=(
+                        "pe",
+                        "memory",
+                        "rwx",
+                    ),
                 )
             )
-
-    if data.has_tls_callbacks:
-        findings.append(
-            Finding(
-                title="TLS callbacks present",
-                description=(
-                    "TLS callbacks execute before the normal entry point and are "
-                    "sometimes used for initialization, unpacking, or anti-analysis."
-                ),
-                category="execution-flow",
-                severity=Severity.MEDIUM,
-                confidence=65,
-                evidence=(
-                    Evidence(
-                        kind="pe-directory",
-                        value="TLS",
-                        location="data directory",
-                    ),
-                ),
-                tags=("pe", "tls", "anti-analysis"),
-            )
-        )
 
     return tuple(findings)
 
@@ -408,11 +462,17 @@ class PEAnalyzer:
     version = "0.1.0"
     supported_families = frozenset({"pe"})
 
-    def supports(self, family: str) -> bool:
+    def supports(
+        self,
+        family: str,
+    ) -> bool:
         """Return whether this analyzer supports the file family."""
         return family in self.supported_families
 
-    def analyze(self, sample_path: Path) -> AnalysisResult:
+    def analyze(
+        self,
+        sample_path: Path,
+    ) -> AnalysisResult:
         """Analyze a PE sample and return normalized data."""
         started_at = datetime.now(UTC)
         start = time.perf_counter()
@@ -426,11 +486,17 @@ class PEAnalyzer:
             if not resolved_path.is_file():
                 raise ValueError(f"Path is not a regular file: {resolved_path}")
 
-            pe = pefile.PE(str(resolved_path), fast_load=False)
+            pe = pefile.PE(
+                str(resolved_path),
+                fast_load=False,
+            )
 
             try:
                 pe.parse_data_directories()
-                data = _build_data(pe, resolved_path)
+                data = _build_data(
+                    pe,
+                    resolved_path,
+                )
                 findings = _build_findings(data)
             finally:
                 pe.close()
@@ -447,8 +513,12 @@ class PEAnalyzer:
                 data=data.model_dump(mode="json"),
             )
 
-        except (FileNotFoundError, ValueError):
+        except (
+            FileNotFoundError,
+            ValueError,
+        ):
             raise
+
         except pefile.PEFormatError as error:
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -460,12 +530,13 @@ class PEAnalyzer:
                 duration_ms=duration_ms,
                 errors=(
                     AnalyzerError(
-                        error_type=type(error).__name__,
+                        error_type=(type(error).__name__),
                         message=str(error),
                         recoverable=False,
                     ),
                 ),
             )
+
         except Exception as error:
             duration_ms = int((time.perf_counter() - start) * 1000)
 
@@ -477,7 +548,7 @@ class PEAnalyzer:
                 duration_ms=duration_ms,
                 errors=(
                     AnalyzerError(
-                        error_type=type(error).__name__,
+                        error_type=(type(error).__name__),
                         message=str(error),
                         recoverable=True,
                     ),

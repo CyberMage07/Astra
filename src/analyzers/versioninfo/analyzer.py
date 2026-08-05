@@ -50,6 +50,40 @@ SUSPICIOUS_PRODUCT_NAMES = {
     "java runtime environment",
 }
 
+ANALYST_ASSIGNED_FILENAMES = {
+    "sample.exe",
+    "sample.bin",
+    "malware.exe",
+    "malware.bin",
+    "unknown.exe",
+    "unknown.bin",
+    "suspicious.exe",
+    "suspicious.bin",
+    "payload.exe",
+    "payload.bin",
+    "test.exe",
+    "test.bin",
+    "file.exe",
+    "file.bin",
+}
+
+ANALYST_ASSIGNED_STEMS = {
+    "sample",
+    "malware",
+    "unknown",
+    "suspicious",
+    "payload",
+    "test",
+    "file",
+}
+
+HASH_LENGTHS = {
+    32,
+    40,
+    64,
+    128,
+}
+
 
 def _decode_value(
     value: object,
@@ -85,14 +119,24 @@ def _extract_string_file_info(
     """Extract normalized StringFileInfo entries."""
     entries: list[VersionStringEntry] = []
 
-    file_info = getattr(pe, "FileInfo", None)
+    file_info = getattr(
+        pe,
+        "FileInfo",
+        None,
+    )
 
     if not file_info:
         return ()
 
     for file_info_group in file_info:
         for info in file_info_group:
-            key = _decode_value(getattr(info, "Key", ""))
+            key = _decode_value(
+                getattr(
+                    info,
+                    "Key",
+                    "",
+                )
+            )
 
             if key != "StringFileInfo":
                 continue
@@ -104,7 +148,14 @@ def _extract_string_file_info(
             )
 
             for string_table in string_tables:
-                table_key = _decode_value(getattr(string_table, "LangID", ""))
+                table_key = _decode_value(
+                    getattr(
+                        string_table,
+                        "LangID",
+                        "",
+                    )
+                )
+
                 language, code_page = _parse_translation(table_key)
 
                 entries_map = getattr(
@@ -113,7 +164,10 @@ def _extract_string_file_info(
                     {},
                 )
 
-                for raw_key, raw_value in entries_map.items():
+                for (
+                    raw_key,
+                    raw_value,
+                ) in entries_map.items():
                     normalized_key = _decode_value(raw_key)
                     normalized_value = _decode_value(raw_value)
 
@@ -136,14 +190,24 @@ def _extract_translation(
     pe: pefile.PE,
 ) -> tuple[str | None, str | None]:
     """Extract the first VarFileInfo translation."""
-    file_info = getattr(pe, "FileInfo", None)
+    file_info = getattr(
+        pe,
+        "FileInfo",
+        None,
+    )
 
     if not file_info:
         return None, None
 
     for file_info_group in file_info:
         for info in file_info_group:
-            key = _decode_value(getattr(info, "Key", ""))
+            key = _decode_value(
+                getattr(
+                    info,
+                    "Key",
+                    "",
+                )
+            )
 
             if key != "VarFileInfo":
                 continue
@@ -161,14 +225,23 @@ def _extract_translation(
                     {},
                 )
 
-                for raw_key, raw_value in entries.items():
+                for (
+                    raw_key,
+                    raw_value,
+                ) in entries.items():
                     normalized_key = _decode_value(raw_key)
 
                     if normalized_key != "Translation":
                         continue
 
-                    if isinstance(raw_value, dict):
-                        for language, code_page in raw_value.items():
+                    if isinstance(
+                        raw_value,
+                        dict,
+                    ):
+                        for (
+                            language,
+                            code_page,
+                        ) in raw_value.items():
                             return (
                                 f"{int(language):04X}",
                                 f"{int(code_page):04X}",
@@ -190,7 +263,10 @@ def _extract_translation(
 
 
 def _field_value(
-    entries: tuple[VersionStringEntry, ...],
+    entries: tuple[
+        VersionStringEntry,
+        ...,
+    ],
     field_name: str,
 ) -> str | None:
     """Return the first non-empty value for a version field."""
@@ -210,6 +286,36 @@ def _filename_matches(
         return None
 
     return Path(sample_name).name.casefold() == Path(original_filename).name.casefold()
+
+
+def _looks_analyst_assigned(
+    sample_name: str,
+) -> bool:
+    """Return whether a filename appears analyst-assigned or hash-based."""
+    filename = Path(sample_name).name.casefold()
+    stem = Path(filename).stem
+
+    if filename in ANALYST_ASSIGNED_FILENAMES:
+        return True
+
+    if stem in ANALYST_ASSIGNED_STEMS:
+        return True
+
+    if stem.isdigit():
+        return True
+
+    if len(stem) in HASH_LENGTHS:
+        try:
+            int(
+                stem,
+                16,
+            )
+        except ValueError:
+            return False
+
+        return True
+
+    return False
 
 
 def _is_suspicious_company_name(
@@ -233,7 +339,10 @@ def _is_suspicious_product_name(
 
 
 def _missing_identity_fields(
-    entries: tuple[VersionStringEntry, ...],
+    entries: tuple[
+        VersionStringEntry,
+        ...,
+    ],
 ) -> bool:
     """Return whether important identity fields are missing."""
     present_keys = {entry.key.casefold() for entry in entries if entry.value}
@@ -254,13 +363,14 @@ def _build_findings(
     if not data.version_info_present:
         return ()
 
-    if data.original_filename_matches is False:
+    if data.original_filename_matches is False and not _looks_analyst_assigned(sample_name):
         findings.append(
             Finding(
-                title="Original filename does not match analyzed file",
+                title=("Original filename does not match analyzed file"),
                 description=(
-                    "The PE version information reports an "
-                    "OriginalFilename that differs from the actual "
+                    "The PE version information "
+                    "reports an OriginalFilename "
+                    "that differs from the actual "
                     "sample filename."
                 ),
                 category="pe-version-info",
@@ -270,9 +380,9 @@ def _build_findings(
                     Evidence(
                         kind="version-info",
                         value=(data.original_filename or "unknown"),
-                        location="OriginalFilename",
+                        location=("OriginalFilename"),
                         metadata={
-                            "actual_filename": sample_name,
+                            "actual_filename": (sample_name),
                         },
                     ),
                 ),
@@ -287,13 +397,15 @@ def _build_findings(
     if data.suspicious_company_name:
         findings.append(
             Finding(
-                title="Potential vendor impersonation in company metadata",
+                title=("Potential vendor impersonation in company metadata"),
                 description=(
-                    "The PE claims a well-known company name. "
-                    "This metadata should be correlated with the "
-                    "digital signature and trust status."
+                    "The PE claims a well-known "
+                    "company name. This metadata "
+                    "should be correlated with the "
+                    "digital signature and trust "
+                    "status."
                 ),
-                category="metadata-impersonation",
+                category=("metadata-impersonation"),
                 severity=Severity.MEDIUM,
                 confidence=65,
                 evidence=(
@@ -315,13 +427,16 @@ def _build_findings(
     if data.suspicious_product_name:
         findings.append(
             Finding(
-                title="Potential software impersonation in product metadata",
+                title=("Potential software impersonation in product metadata"),
                 description=(
-                    "The PE reports a product name associated with "
-                    "widely deployed software. This may indicate "
-                    "masquerading if other metadata is inconsistent."
+                    "The PE reports a product "
+                    "name associated with widely "
+                    "deployed software. This may "
+                    "indicate masquerading if "
+                    "other metadata is "
+                    "inconsistent."
                 ),
-                category="metadata-impersonation",
+                category=("metadata-impersonation"),
                 severity=Severity.MEDIUM,
                 confidence=60,
                 evidence=(
@@ -343,7 +458,7 @@ def _build_findings(
     if data.missing_identity_fields:
         findings.append(
             Finding(
-                title="PE version identity metadata is incomplete",
+                title=("PE version identity metadata is incomplete"),
                 description=(
                     "Most expected identity fields are absent from the PE version information."
                 ),
@@ -354,7 +469,7 @@ def _build_findings(
                     Evidence(
                         kind="version-info",
                         value=str(data.string_count),
-                        location="StringFileInfo",
+                        location=("StringFileInfo"),
                         metadata={
                             "expected_fields": (*IDENTITY_FIELDS,),
                         },
@@ -378,7 +493,10 @@ class VersionInfoAnalyzer:
     version = "0.1.0"
     supported_families = frozenset({"pe"})
 
-    def supports(self, family: str) -> bool:
+    def supports(
+        self,
+        family: str,
+    ) -> bool:
         """Return whether this analyzer supports the file family."""
         return family in self.supported_families
 
@@ -405,7 +523,10 @@ class VersionInfoAnalyzer:
 
             try:
                 entries = _extract_string_file_info(pe)
-                language, code_page = _extract_translation(pe)
+                (
+                    language,
+                    code_page,
+                ) = _extract_translation(pe)
             finally:
                 pe.close()
 
@@ -451,22 +572,24 @@ class VersionInfoAnalyzer:
                 code_page = entries[0].code_page
 
             analysis_data = VersionInfoAnalysisData(
-                version_info_present=version_info_present,
+                version_info_present=(version_info_present),
                 company_name=company_name,
-                file_description=file_description,
+                file_description=(file_description),
                 file_version=file_version,
                 internal_name=internal_name,
-                legal_copyright=legal_copyright,
-                original_filename=original_filename,
+                legal_copyright=(legal_copyright),
+                original_filename=(original_filename),
                 product_name=product_name,
-                product_version=product_version,
+                product_version=(product_version),
                 language=language,
                 code_page=code_page,
                 string_count=len(entries),
                 strings=entries,
-                original_filename_matches=_filename_matches(
-                    resolved_path.name,
-                    original_filename,
+                original_filename_matches=(
+                    _filename_matches(
+                        resolved_path.name,
+                        original_filename,
+                    )
                 ),
                 suspicious_company_name=(_is_suspicious_company_name(company_name)),
                 suspicious_product_name=(_is_suspicious_product_name(product_name)),
@@ -477,7 +600,7 @@ class VersionInfoAnalyzer:
 
             findings = _build_findings(
                 analysis_data,
-                sample_name=resolved_path.name,
+                sample_name=(resolved_path.name),
             )
 
             duration_ms = int((time.perf_counter() - start) * 1000)
@@ -503,7 +626,7 @@ class VersionInfoAnalyzer:
                 duration_ms=duration_ms,
                 errors=(
                     AnalyzerError(
-                        error_type=type(error).__name__,
+                        error_type=(type(error).__name__),
                         message=str(error),
                         recoverable=False,
                     ),
@@ -521,7 +644,7 @@ class VersionInfoAnalyzer:
                 duration_ms=duration_ms,
                 errors=(
                     AnalyzerError(
-                        error_type=type(error).__name__,
+                        error_type=(type(error).__name__),
                         message=str(error),
                         recoverable=True,
                     ),

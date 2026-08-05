@@ -18,6 +18,8 @@ from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
+from analyzers.tls import TLSAnalyzer
+from analyzers.versioninfo import VersionInfoAnalyzer
 from analyzers.yara import YaraAnalyzer
 from packages.schemas import (
     AnalysisReport,
@@ -72,7 +74,9 @@ class AnalysisOrchestrator:
                 SectionsAnalyzer(),
                 ResourcesAnalyzer(),
                 OverlayAnalyzer(),
+                TLSAnalyzer(),
                 SignatureAnalyzer(),
+                VersionInfoAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),

@@ -98,8 +98,8 @@ def test_rwx_section_creates_high_severity_finding() -> None:
     )
 
 
-def test_tls_callbacks_create_finding() -> None:
-    """TLS callbacks should produce an execution-flow finding."""
+def test_tls_callbacks_remain_available_as_metadata() -> None:
+    """The PE schema should preserve TLS presence without duplicating findings."""
     data = PEAnalysisData(
         header=_header(),
         has_tls_callbacks=True,
@@ -107,4 +107,5 @@ def test_tls_callbacks_create_finding() -> None:
 
     findings = _build_findings(data)
 
-    assert any(finding.category == "execution-flow" for finding in findings)
+    assert data.has_tls_callbacks is True
+    assert not any(finding.title == "TLS callbacks present" for finding in findings)
