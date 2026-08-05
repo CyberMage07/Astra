@@ -16,6 +16,7 @@ from analyzers.metadata import MetadataAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.resources import ResourcesAnalyzer
+from analyzers.richheader import RichHeaderAnalyzer
 from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -1147,6 +1148,165 @@ def pe(sample: Path) -> None:
 
     if len(data["imports"]) > 100:
         console.print(f"[dim]Showing the first 100 of {len(data['imports'])} imports.[/dim]")
+
+
+@app.command()
+def richheader(sample: Path) -> None:
+    """Analyze PE Rich Header compiler and toolchain metadata."""
+    try:
+        result = RichHeaderAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown Rich Header analysis error"
+        )
+        console.print(f"[red]Rich Header analysis failed:[/red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Rich Header Analysis",
+        show_header=False,
+    )
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Rich header present",
+        "Yes" if data["rich_header_present"] else "No",
+    )
+    summary.add_row(
+        "Malformed",
+        "Yes" if data["malformed"] else "No",
+    )
+    summary.add_row(
+        "Checksum valid",
+        (
+            "Yes"
+            if data["checksum_valid"] is True
+            else ("No" if data["checksum_valid"] is False else "Unknown")
+        ),
+    )
+    summary.add_row(
+        "DanS offset",
+        (f"0x{data['dans_offset']:x}" if data["dans_offset"] is not None else "-"),
+    )
+    summary.add_row(
+        "Rich offset",
+        (f"0x{data['rich_offset']:x}" if data["rich_offset"] is not None else "-"),
+    )
+    summary.add_row(
+        "XOR key",
+        (f"0x{data['xor_key']:08x}" if data["xor_key"] is not None else "-"),
+    )
+    summary.add_row(
+        "Entries",
+        str(data["entry_count"]),
+    )
+    summary.add_row(
+        "Object count",
+        str(data["total_object_count"]),
+    )
+    summary.add_row(
+        "Duplicate entries",
+        str(data["duplicate_entries"]),
+    )
+    summary.add_row(
+        "Zero-count entries",
+        str(data["zero_count_entries"]),
+    )
+    summary.add_row(
+        "Unknown products",
+        str(data["unknown_product_entries"]),
+    )
+    summary.add_row(
+        "Toolchains",
+        (", ".join(data["toolchain_families"]) or "Unknown"),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    entries = data["entries"]
+
+    if entries:
+        table = Table(title=f"Rich Header Entries ({len(entries)})")
+        table.add_column(
+            "Product ID",
+            justify="right",
+        )
+        table.add_column(
+            "Build",
+            justify="right",
+        )
+        table.add_column(
+            "Count",
+            justify="right",
+        )
+        table.add_column("Product")
+        table.add_column("Toolchain")
+
+        for entry in entries:
+            table.add_row(
+                f"0x{entry['product_id']:04x}",
+                str(entry["build_number"]),
+                str(entry["count"]),
+                entry["product_name"] or "Unknown",
+                entry["toolchain_family"] or "Unknown",
+            )
+
+        console.print(table)
+
+    if not result.findings:
+        console.print("[green]No suspicious Rich Header indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Rich Header Findings ({len(result.findings)})")
+    findings.add_column(
+        "Severity",
+        justify="center",
+    )
+    findings.add_column("Finding")
+    findings.add_column(
+        "Confidence",
+        justify="right",
+    )
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(
+            severity,
+            "white",
+        )
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
 
 
 @app.command()

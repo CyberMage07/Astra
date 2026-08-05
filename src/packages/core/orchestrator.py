@@ -14,6 +14,7 @@ from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.resources import ResourcesAnalyzer
+from analyzers.richheader import RichHeaderAnalyzer
 from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
@@ -77,6 +78,7 @@ class AnalysisOrchestrator:
                 TLSAnalyzer(),
                 SignatureAnalyzer(),
                 VersionInfoAnalyzer(),
+                RichHeaderAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),

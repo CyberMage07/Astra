@@ -50,6 +50,10 @@ from packages.schemas.resources import (
     ResourceEntry,
     ResourceType,
 )
+from packages.schemas.richheader import (
+    RichHeaderAnalysisData,
+    RichHeaderEntry,
+)
 from packages.schemas.sample import FileHashes, SampleMetadata
 from packages.schemas.sections import (
     SectionAnalysisData,
@@ -111,6 +115,8 @@ __all__ = [
     "ResourceAnalysisData",
     "ResourceEntry",
     "ResourceType",
+    "RichHeaderAnalysisData",
+    "RichHeaderEntry",
     "SampleMetadata",
     "SectionAnalysisData",
     "SectionInfo",
