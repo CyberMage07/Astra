@@ -25,6 +25,9 @@ from packages.schemas.ioc import (
     IOCSummary,
     IOCType,
 )
+from packages.schemas.loadconfig import (
+    LoadConfigAnalysisData,
+)
 from packages.schemas.metadata import (
     MetadataAnalysisData,
     MetadataEntry,
@@ -106,6 +109,7 @@ __all__ = [
     "ImportAnalysisData",
     "ImportBehaviorSummary",
     "ImportIndicator",
+    "LoadConfigAnalysisData",
     "MetadataAnalysisData",
     "MetadataEntry",
     "MetadataSource",

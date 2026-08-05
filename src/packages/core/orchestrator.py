@@ -10,6 +10,7 @@ from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.hashing import calculate_hashes
 from analyzers.ioc import IOCAnalyzer
+from analyzers.loadconfig import LoadConfigAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
@@ -81,6 +82,7 @@ class AnalysisOrchestrator:
                 VersionInfoAnalyzer(),
                 RichHeaderAnalyzer(),
                 DebugDirectoryAnalyzer(),
+                LoadConfigAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
