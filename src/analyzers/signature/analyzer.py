@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import time
+import warnings
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -156,7 +157,17 @@ def _load_certificates(
     pkcs7_blob: bytes,
 ) -> tuple[x509.Certificate, ...]:
     """Load embedded certificates from Authenticode PKCS#7 data."""
-    certificates = pkcs7.load_der_pkcs7_certificates(pkcs7_blob)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=(
+                r"PKCS#7 certificates could not be parsed as DER, "
+                r"falling back to parsing as BER\..*"
+            ),
+            category=UserWarning,
+        )
+
+        certificates = pkcs7.load_der_pkcs7_certificates(pkcs7_blob)
 
     return tuple(certificates)
 
@@ -169,7 +180,9 @@ def _digest_algorithm(
     Full Authenticode digest-algorithm parsing will be added with
     cryptographic signature verification.
     """
-    return f"pkcs7-sha256:{hashlib.sha256(pkcs7_blob).hexdigest()}"
+    digest = hashlib.sha256(pkcs7_blob).hexdigest()
+
+    return f"pkcs7-sha256:{digest}"
 
 
 def _status_from_certificates(
@@ -211,7 +224,11 @@ def _build_findings(
                         location="PE security directory",
                     ),
                 ),
-                tags=("pe", "signature", "unsigned"),
+                tags=(
+                    "pe",
+                    "signature",
+                    "unsigned",
+                ),
             )
         )
 
@@ -235,7 +252,7 @@ def _build_findings(
                 evidence=tuple(
                     Evidence(
                         kind="certificate",
-                        value=certificate.subject or "unknown subject",
+                        value=(certificate.subject or "unknown subject"),
                         location="Authenticode PKCS#7",
                         metadata={
                             "issuer": certificate.issuer,
@@ -248,7 +265,12 @@ def _build_findings(
                     )
                     for certificate in expired_certificates[:10]
                 ),
-                tags=("pe", "signature", "certificate", "expired"),
+                tags=(
+                    "pe",
+                    "signature",
+                    "certificate",
+                    "expired",
+                ),
             )
         )
 
@@ -261,8 +283,9 @@ def _build_findings(
             Finding(
                 title="Self-signed certificate detected",
                 description=(
-                    "The PE signature contains one or more self-signed "
-                    "certificates. Trust has not been established."
+                    "The PE signature contains one or more "
+                    "self-signed certificates. Trust has not "
+                    "been established."
                 ),
                 category="digital-signature",
                 severity=Severity.LOW,
@@ -270,12 +293,17 @@ def _build_findings(
                 evidence=tuple(
                     Evidence(
                         kind="certificate",
-                        value=certificate.subject or "unknown subject",
+                        value=(certificate.subject or "unknown subject"),
                         location="Authenticode PKCS#7",
                     )
                     for certificate in self_signed_certificates[:10]
                 ),
-                tags=("pe", "signature", "certificate", "self-signed"),
+                tags=(
+                    "pe",
+                    "signature",
+                    "certificate",
+                    "self-signed",
+                ),
             )
         )
 
@@ -293,7 +321,10 @@ class SignatureAnalyzer:
         """Return whether this analyzer supports the file family."""
         return family in self.supported_families
 
-    def analyze(self, sample_path: Path) -> AnalysisResult:
+    def analyze(
+        self,
+        sample_path: Path,
+    ) -> AnalysisResult:
         """Analyze PE signature presence and embedded certificates."""
         started_at = datetime.now(UTC)
         start = time.perf_counter()
@@ -307,6 +338,7 @@ class SignatureAnalyzer:
 
         try:
             sample_data = resolved_path.read_bytes()
+
             pe = pefile.PE(
                 str(resolved_path),
                 fast_load=False,
@@ -325,7 +357,10 @@ class SignatureAnalyzer:
                 security_size,
             )
 
-            parsed_certificates: tuple[x509.Certificate, ...] = ()
+            parsed_certificates: tuple[
+                x509.Certificate,
+                ...,
+            ] = ()
 
             if pkcs7_blob is not None:
                 parsed_certificates = _load_certificates(pkcs7_blob)
@@ -333,7 +368,11 @@ class SignatureAnalyzer:
             now = datetime.now(UTC)
 
             certificates = tuple(
-                _certificate_info(certificate, now) for certificate in parsed_certificates
+                _certificate_info(
+                    certificate,
+                    now,
+                )
+                for certificate in parsed_certificates
             )
 
             status = _status_from_certificates(
@@ -356,8 +395,8 @@ class SignatureAnalyzer:
                 timestamp=None,
                 verification_error=(
                     None
-                    if pkcs7_blob is not None or not signature_present
-                    else "Security directory exists but PKCS#7 data could not be parsed."
+                    if (pkcs7_blob is not None or not signature_present)
+                    else ("Security directory exists but PKCS#7 data could not be parsed.")
                 ),
             )
 

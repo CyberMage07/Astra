@@ -1,5 +1,6 @@
 """Tests for Astra PE digital-signature analysis."""
 
+import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -36,6 +37,54 @@ def test_signature_analyzer_contract() -> None:
     assert isinstance(analyzer, Analyzer)
     assert analyzer.supports("pe") is True
     assert analyzer.supports("elf") is False
+
+
+def test_pkcs7_ber_fallback_warning_is_suppressed(
+    tmp_path: Path,
+) -> None:
+    """The known DER-to-BER fallback warning should not reach the CLI."""
+    sample = tmp_path / "signed.exe"
+
+    certificate_header = (
+        (8).to_bytes(4, "little") + (0x0200).to_bytes(2, "little") + (0x0002).to_bytes(2, "little")
+    )
+    sample.write_bytes(b"MZ" + b"\x00" * 30 + certificate_header)
+
+    pe = _mock_pe(
+        security_offset=32,
+        security_size=8,
+    )
+
+    def _load_with_warning(
+        _blob: bytes,
+    ) -> list[object]:
+        warnings.warn(
+            (
+                "PKCS#7 certificates could not be parsed as DER, "
+                "falling back to parsing as BER. "
+                "Error details: ValueError"
+            ),
+            UserWarning,
+            stacklevel=2,
+        )
+        return []
+
+    with (
+        patch(
+            "analyzers.signature.analyzer.pefile.PE",
+            return_value=pe,
+        ),
+        patch(
+            "analyzers.signature.analyzer.pkcs7.load_der_pkcs7_certificates",
+            side_effect=_load_with_warning,
+        ),
+        warnings.catch_warnings(record=True) as caught,
+    ):
+        warnings.simplefilter("always")
+        result = SignatureAnalyzer().analyze(sample)
+
+    assert result.status is AnalysisStatus.COMPLETED
+    assert not any("falling back to parsing as BER" in str(item.message) for item in caught)
 
 
 def test_unsigned_pe_is_reported(

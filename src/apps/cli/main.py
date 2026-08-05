@@ -4,6 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 import typer
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -115,113 +116,274 @@ def analyze(sample: Path) -> None:
     except (FileNotFoundError, ValueError) as error:
         _handle_path_error(error)
 
-    summary = Table(title="Astra Unified Analysis", show_header=False)
-    summary.add_column("Field", style="cyan")
+    summary = Table(
+        title="Astra Unified Analysis",
+        show_header=False,
+        box=box.ROUNDED,
+    )
+    summary.add_column(
+        "Field",
+        style="bold cyan",
+    )
     summary.add_column("Value")
 
-    summary.add_row("Sample", report.original_name)
-    summary.add_row("Path", str(report.sample_path))
-    summary.add_row("Size", f"{report.size_bytes:,} bytes")
-    summary.add_row("Detected family", report.file_type.detected_family)
-    summary.add_row("MIME type", report.file_type.mime_type)
-    summary.add_row("SHA-256", report.hashes.sha256)
-    summary.add_row("Analyzers", str(len(report.analyzer_results)))
-    summary.add_row("Completed", str(report.completed_analyzers))
-    summary.add_row("Failed/partial", str(report.failed_analyzers))
-    summary.add_row("Findings", str(len(report.findings)))
-    summary.add_row("Duration", f"{report.total_duration_ms} ms")
+    summary.add_row(
+        "Sample",
+        report.original_name,
+    )
+    summary.add_row(
+        "Path",
+        str(report.sample_path),
+    )
+    summary.add_row(
+        "Size",
+        f"{report.size_bytes:,} bytes",
+    )
+    summary.add_row(
+        "Detected family",
+        report.file_type.detected_family,
+    )
+    summary.add_row(
+        "MIME type",
+        report.file_type.mime_type,
+    )
+    summary.add_row(
+        "SHA-256",
+        report.hashes.sha256,
+    )
+    summary.add_row(
+        "Analyzers",
+        str(len(report.analyzer_results)),
+    )
+    summary.add_row(
+        "Completed",
+        str(report.completed_analyzers),
+    )
+    summary.add_row(
+        "Failed/partial",
+        str(report.failed_analyzers),
+    )
+    summary.add_row(
+        "Findings",
+        str(len(report.findings)),
+    )
+    summary.add_row(
+        "Duration",
+        f"{report.total_duration_ms} ms",
+    )
 
     console.print(summary)
-    if report.assessment is not None:
-        assessment = report.assessment
 
-        classification_styles = {
-            "likely-benign": "green",
-            "low-risk": "green",
-            "suspicious": "yellow",
-            "high-risk": "red",
-            "highly-suspicious": "bold white on red",
-        }
+    executions = Table(
+        title="Analysis Modules Executed",
+        box=box.ROUNDED,
+    )
+    executions.add_column(
+        "Analyzer",
+        style="bold cyan",
+    )
+    executions.add_column(
+        "Status",
+        justify="center",
+    )
+    executions.add_column(
+        "Findings",
+        justify="right",
+    )
+    executions.add_column(
+        "Errors",
+        justify="right",
+    )
+    executions.add_column(
+        "Duration",
+        justify="right",
+    )
 
-        classification = assessment.classification.value
-        style = classification_styles.get(classification, "white")
-
-        verdict = Table(title="Threat Assessment", show_header=False)
-        verdict.add_column("Field", style="cyan")
-        verdict.add_column("Value")
-
-        verdict.add_row(
-            "Classification",
-            f"[{style}]{classification.upper()}[/{style}]",
-        )
-        verdict.add_row("Risk score", f"{assessment.score} / 100")
-        verdict.add_row("Confidence", f"{assessment.confidence}%")
-        verdict.add_row(
-            "MITRE ATT&CK",
-            ", ".join(assessment.attack_techniques) or "None",
-        )
-
-        console.print(verdict)
-
-        if assessment.reasons:
-            reasons = Table(title="Assessment Reasons")
-            reasons.add_column("Reason")
-
-            for reason in assessment.reasons:
-                reasons.add_row(reason)
-
-            console.print(reasons)
-
-    executions = Table(title="Analyzer Execution")
-    executions.add_column("Analyzer", style="cyan")
-    executions.add_column("Status", justify="center")
-    executions.add_column("Findings", justify="right")
-    executions.add_column("Errors", justify="right")
-    executions.add_column("Duration", justify="right")
+    execution_styles = {
+        "completed": "green",
+        "partial": "yellow",
+        "failed": "bold red",
+        "skipped": "dim",
+    }
 
     for execution in report.analyzer_executions:
+        status = execution.status.lower()
+        status_style = execution_styles.get(
+            status,
+            "white",
+        )
+
+        findings_style = "yellow" if execution.finding_count > 0 else "green"
+
+        errors_style = "bold red" if execution.error_count > 0 else "green"
+
         executions.add_row(
             execution.analyzer,
-            execution.status.upper(),
-            str(execution.finding_count),
-            str(execution.error_count),
+            (f"[{status_style}]{execution.status.upper()}[/{status_style}]"),
+            (f"[{findings_style}]{execution.finding_count}[/{findings_style}]"),
+            (f"[{errors_style}]{execution.error_count}[/{errors_style}]"),
             f"{execution.duration_ms} ms",
         )
 
     console.print(executions)
 
-    if not report.findings:
-        console.print("[green]No suspicious indicators detected.[/green]")
-        return
-
     severity_styles = {
         "info": "blue",
         "low": "green",
         "medium": "yellow",
-        "high": "red",
+        "high": "bold red",
         "critical": "bold white on red",
     }
 
-    findings = Table(title=f"Unified Findings ({len(report.findings)})")
-    findings.add_column("Severity", justify="center")
-    findings.add_column("Category", style="cyan")
-    findings.add_column("Finding")
-    findings.add_column("Confidence", justify="right")
-    findings.add_column("MITRE")
-
-    for finding in report.findings:
-        severity = finding.severity.value
-        style = severity_styles.get(severity, "white")
-
-        findings.add_row(
-            f"[{style}]{severity.upper()}[/{style}]",
-            finding.category,
-            finding.title,
-            f"{finding.confidence}%",
-            ", ".join(finding.attack_techniques) or "-",
+    if report.findings:
+        findings = Table(
+            title=(f"Unified Security Findings ({len(report.findings)})"),
+            box=box.ROUNDED,
         )
+        findings.add_column(
+            "Severity",
+            justify="center",
+        )
+        findings.add_column(
+            "Category",
+            style="cyan",
+        )
+        findings.add_column("Finding")
+        findings.add_column(
+            "Confidence",
+            justify="right",
+        )
+        findings.add_column("MITRE")
 
-    console.print(findings)
+        for finding in report.findings:
+            severity = finding.severity.value
+            severity_style = severity_styles.get(
+                severity,
+                "white",
+            )
+
+            findings.add_row(
+                (f"[{severity_style}]{severity.upper()}[/{severity_style}]"),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+                (", ".join(finding.attack_techniques) or "-"),
+            )
+
+        console.print(findings)
+    else:
+        console.print("\n[bold green]No suspicious indicators were detected.[/bold green]\n")
+
+    if report.assessment is None:
+        console.print("[yellow]Final threat assessment is unavailable.[/yellow]")
+        return
+
+    assessment = report.assessment
+
+    if assessment.reasons:
+        reasons = Table(
+            title="Assessment Evidence",
+            box=box.ROUNDED,
+        )
+        reasons.add_column(
+            "Severity",
+            justify="center",
+        )
+        reasons.add_column("Reason")
+
+        for reason in assessment.reasons:
+            severity_name, separator, description = reason.partition(":")
+
+            normalized_severity = severity_name.strip().lower()
+            reason_style = severity_styles.get(
+                normalized_severity,
+                "white",
+            )
+
+            if separator:
+                reasons.add_row(
+                    (f"[{reason_style}]{severity_name.strip().upper()}[/{reason_style}]"),
+                    description.strip(),
+                )
+            else:
+                reasons.add_row(
+                    "-",
+                    reason,
+                )
+
+        console.print(reasons)
+
+    classification_styles = {
+        "likely-benign": "bold green",
+        "low-risk": "bold green",
+        "suspicious": "bold yellow",
+        "medium-risk": "bold yellow",
+        "high-risk": "bold red",
+        "highly-suspicious": "bold white on red",
+        "critical": "bold white on red",
+    }
+
+    classification = assessment.classification.value
+    classification_style = classification_styles.get(
+        classification,
+        "bold white",
+    )
+
+    if assessment.score >= 70:
+        score_style = "bold red"
+    elif assessment.score >= 40:
+        score_style = "bold yellow"
+    else:
+        score_style = "bold green"
+
+    if assessment.confidence >= 80:
+        confidence_style = "bold green"
+    elif assessment.confidence >= 60:
+        confidence_style = "yellow"
+    else:
+        confidence_style = "red"
+
+    final_assessment = Table(
+        title="[bold]FINAL THREAT ASSESSMENT[/bold]",
+        show_header=False,
+        box=box.DOUBLE_EDGE,
+        border_style=classification_style,
+        title_style=classification_style,
+        padding=(0, 2),
+    )
+    final_assessment.add_column(
+        "Field",
+        style="bold cyan",
+    )
+    final_assessment.add_column("Value")
+
+    final_assessment.add_row(
+        "Classification",
+        (f"[{classification_style}]{classification.upper()}[/{classification_style}]"),
+    )
+    final_assessment.add_row(
+        "Risk score",
+        (f"[{score_style}]{assessment.score} / 100[/{score_style}]"),
+    )
+    final_assessment.add_row(
+        "Confidence",
+        (f"[{confidence_style}]{assessment.confidence}%[/{confidence_style}]"),
+    )
+    final_assessment.add_row(
+        "MITRE ATT&CK",
+        (", ".join(assessment.attack_techniques) or "None"),
+    )
+    final_assessment.add_row(
+        "Total findings",
+        str(len(report.findings)),
+    )
+    final_assessment.add_row(
+        "Analyzer status",
+        (f"{report.completed_analyzers} completed, {report.failed_analyzers} failed/partial"),
+    )
+
+    console.print()
+    console.print(final_assessment)
 
 
 @app.command()

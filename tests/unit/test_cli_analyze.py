@@ -103,13 +103,13 @@ def test_analyze_command_displays_unified_report(
     assert "Astra Unified Analysis" in result.stdout
     assert "sample.exe" in result.stdout
     assert "Detected family" in result.stdout
-    assert "Threat Assessment" in result.stdout
+    assert "FINAL THREAT ASSESSMENT" in result.stdout
     assert "HIGH-RISK" in result.stdout
     assert "78 / 100" in result.stdout
     assert "92%" in result.stdout
-    assert "Assessment Reasons" in result.stdout
-    assert "Analyzer Execution" in result.stdout
-    assert "Unified Findings" in result.stdout
+    assert "Assessment Evidence" in result.stdout
+    assert "Analysis Modules Executed" in result.stdout
+    assert "Unified Security Findings" in result.stdout
     assert "process-injection" in result.stdout
     assert "CreateRemoteThread" in result.stdout
     assert "T1055" in result.stdout
@@ -166,10 +166,10 @@ def test_analyze_command_handles_no_findings(
         result = runner.invoke(app, ["analyze", str(sample)])
 
     assert result.exit_code == 0
-    assert "Threat Assessment" in result.stdout
+    assert "FINAL THREAT ASSESSMENT" in result.stdout
     assert "LIKELY-BENIGN" in result.stdout
     assert "0 / 100" in result.stdout
-    assert "No suspicious indicators detected" in result.stdout
+    assert "No suspicious indicators were detected" in result.stdout
 
 
 def test_analyze_command_rejects_missing_file() -> None:
