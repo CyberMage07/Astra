@@ -81,6 +81,7 @@ def test_orchestrator_runs_pe_pipeline(
         _completed_result("signature"),
         _completed_result("versioninfo"),
         _completed_result("richheader"),
+        _completed_result("debug"),
         _completed_result("metadata"),
         _completed_result("imports"),
         _completed_result("packer"),
@@ -105,11 +106,11 @@ def test_orchestrator_runs_pe_pipeline(
 
     assert report.original_name == "sample.exe"
     assert report.file_type.detected_family == "pe"
-    assert len(report.analyzer_results) == 15
-    assert report.completed_analyzers == 15
+    assert len(report.analyzer_results) == 16
+    assert report.completed_analyzers == 16
     assert report.failed_analyzers == 0
     assert report.findings == (finding,)
-    assert len(report.analyzer_executions) == 15
+    assert len(report.analyzer_executions) == 16
 
 
 def test_orchestrator_reuses_strings_result(

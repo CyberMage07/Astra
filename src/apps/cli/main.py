@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.ioc import IOCAnalyzer
@@ -1148,6 +1149,161 @@ def pe(sample: Path) -> None:
 
     if len(data["imports"]) > 100:
         console.print(f"[dim]Showing the first 100 of {len(data['imports'])} imports.[/dim]")
+
+
+@app.command()
+def debug(sample: Path) -> None:
+    """Analyze PE debug-directory and PDB metadata."""
+    try:
+        result = DebugDirectoryAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown debug-directory analysis error"
+        )
+        console.print(f"[red]Debug-directory analysis failed:[/red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Debug Directory Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Debug directory present",
+        "Yes" if data["debug_directory_present"] else "No",
+    )
+    summary.add_row(
+        "Entries",
+        str(data["entry_count"]),
+    )
+    summary.add_row(
+        "CodeView entries",
+        str(data["codeview_entry_count"]),
+    )
+    summary.add_row(
+        "Reproducible entries",
+        str(data["reproducible_entry_count"]),
+    )
+    summary.add_row(
+        "Malformed entries",
+        str(data["malformed_entries"]),
+    )
+    summary.add_row(
+        "PDB paths",
+        str(data["pdb_path_count"]),
+    )
+    summary.add_row(
+        "Username paths",
+        str(data["username_path_count"]),
+    )
+    summary.add_row(
+        "Absolute paths",
+        str(data["absolute_path_count"]),
+    )
+    summary.add_row(
+        "Network paths",
+        str(data["network_path_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    entries = data["entries"]
+
+    if entries:
+        table = Table(title=f"Debug Directory Entries ({len(entries)})")
+        table.add_column(
+            "Index",
+            justify="right",
+        )
+        table.add_column("Type")
+        table.add_column("Signature")
+        table.add_column("GUID")
+        table.add_column(
+            "Age",
+            justify="right",
+        )
+        table.add_column("PDB Path")
+        table.add_column("Flags")
+
+        for entry in entries:
+            flags: list[str] = []
+
+            if entry["malformed"]:
+                flags.append("Malformed")
+
+            if entry["path_contains_username"]:
+                flags.append("Username")
+
+            if entry["path_is_absolute"]:
+                flags.append("Absolute")
+
+            if entry["path_is_network_share"]:
+                flags.append("Network")
+
+            table.add_row(
+                str(entry["index"]),
+                entry["debug_type_name"],
+                entry["signature"] or "-",
+                entry["pdb_guid"] or "-",
+                (str(entry["pdb_age"]) if entry["pdb_age"] is not None else "-"),
+                entry["pdb_path"] or "-",
+                ", ".join(flags) or "-",
+            )
+
+        console.print(table)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE debug-directory indicators detected.[/green]")
+        return
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    findings = Table(title=f"Debug Directory Findings ({len(result.findings)})")
+    findings.add_column(
+        "Severity",
+        justify="center",
+    )
+    findings.add_column("Finding")
+    findings.add_column(
+        "Confidence",
+        justify="right",
+    )
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(
+            severity,
+            "white",
+        )
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
 
 
 @app.command()

@@ -8,6 +8,10 @@ from packages.schemas.analysis import (
     Finding,
     Severity,
 )
+from packages.schemas.debug import (
+    DebugAnalysisData,
+    DebugDirectoryEntry,
+)
 from packages.schemas.entropy import EntropyAnalysisData, EntropyRegion
 from packages.schemas.filetype import FileTypeResult
 from packages.schemas.imports import (
@@ -86,6 +90,8 @@ __all__ = [
     "AnalyzerError",
     "AnalyzerExecution",
     "CertificateInfo",
+    "DebugAnalysisData",
+    "DebugDirectoryEntry",
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",

@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.hashing import calculate_hashes
@@ -79,6 +80,7 @@ class AnalysisOrchestrator:
                 SignatureAnalyzer(),
                 VersionInfoAnalyzer(),
                 RichHeaderAnalyzer(),
+                DebugDirectoryAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
