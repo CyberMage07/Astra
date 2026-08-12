@@ -89,6 +89,7 @@ def test_orchestrator_runs_pe_pipeline(
         _completed_result("exports"),
         _completed_result("importdirectories"),
         _completed_result("relocations"),
+        _completed_result("dotnet"),
     )
 
     with (
@@ -110,11 +111,11 @@ def test_orchestrator_runs_pe_pipeline(
 
     assert report.original_name == "sample.exe"
     assert report.file_type.detected_family == "pe"
-    assert len(report.analyzer_results) == 20
-    assert report.completed_analyzers == 20
+    assert len(report.analyzer_results) == 21
+    assert report.completed_analyzers == 21
     assert report.failed_analyzers == 0
     assert report.findings == (finding,)
-    assert len(report.analyzer_executions) == 20
+    assert len(report.analyzer_executions) == 21
 
 
 def test_orchestrator_reuses_strings_result(

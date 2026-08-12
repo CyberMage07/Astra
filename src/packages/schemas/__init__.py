@@ -12,6 +12,11 @@ from packages.schemas.debug import (
     DebugAnalysisData,
     DebugDirectoryEntry,
 )
+from packages.schemas.dotnet import (
+    DotNetAnalysisData,
+    DotNetAssemblyReference,
+    DotNetStreamInfo,
+)
 from packages.schemas.entropy import EntropyAnalysisData, EntropyRegion
 from packages.schemas.exports import (
     ExportAnalysisData,
@@ -113,6 +118,9 @@ __all__ = [
     "DebugDirectoryEntry",
     "DelayImportEntry",
     "DelayImportLibrary",
+    "DotNetAnalysisData",
+    "DotNetAssemblyReference",
+    "DotNetStreamInfo",
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",

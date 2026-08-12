@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 from analyzers.debug import DebugDirectoryAnalyzer
+from analyzers.dotnet import DotNetAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
@@ -77,6 +78,7 @@ class AnalysisOrchestrator:
         if family == "pe":
             pe_analyzers = (
                 PEAnalyzer(),
+                DotNetAnalyzer(),
                 SectionsAnalyzer(),
                 ResourcesAnalyzer(),
                 OverlayAnalyzer(),

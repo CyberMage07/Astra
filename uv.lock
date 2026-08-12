@@ -64,6 +64,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },
+    { name = "dnfile" },
     { name = "httpx" },
     { name = "pefile" },
     { name = "platformdirs" },
@@ -91,6 +92,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "cryptography", specifier = ">=50.0.0" },
+    { name = "dnfile", specifier = ">=0.18.0" },
     { name = "httpx", specifier = ">=0.24.1" },
     { name = "pefile", specifier = ">=2024.8.26" },
     { name = "platformdirs", specifier = ">=4.0.0" },
@@ -233,6 +235,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c9/02/bd72be9134d25ed783ecbbc38a539ffaefbf90c78418c7fb7229600dbac7/distlib-0.4.3.tar.gz", hash = "sha256:f152097224a0ae24be5a0f6bae1b9359af82133bce63f98a95f86cae1aede9ed", size = 615141, upload-time = "2026-06-12T08:04:52.847Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/02/08/9c41fb51ab5b43eb21674aff13df270e8ba6c4b29c8624e328dc7a9482af/distlib-0.4.3-py2.py3-none-any.whl", hash = "sha256:4b0ce306c966eb73bc3a7b6abad017c556dadd92c44701562cd528ac7fde4d5b", size = 470628, upload-time = "2026-06-12T08:04:50.506Z" },
+]
+
+[[package]]
+name = "dnfile"
+version = "0.18.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pefile" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/c3/89dbe3a48dfa303060d59b74b97b8401cc70b9b4d4c24982202861fd82e9/dnfile-0.18.0.tar.gz", hash = "sha256:24eec63d65535b702236001e648bbf2fa139d1a7bea191fdca17c3be337eb4db", size = 51519, upload-time = "2026-01-31T05:09:11.212Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/ad/4f945155a78800cea02cb258bc0b7704c43cf94f50f75c808f0618694153/dnfile-0.18.0-py3-none-any.whl", hash = "sha256:7579fe2d6bb1d854aa154929c309fbf34e70b622053a043a51d42f079fad1772", size = 48044, upload-time = "2026-01-31T05:09:09.703Z" },
 ]
 
 [[package]]

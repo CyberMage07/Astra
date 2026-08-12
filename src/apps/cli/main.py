@@ -10,6 +10,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from analyzers.debug import DebugDirectoryAnalyzer
+from analyzers.dotnet import DotNetAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
@@ -2120,6 +2121,206 @@ def relocations(sample: Path) -> None:
     for finding in result.findings:
         severity = finding.severity.value
         style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def dotnet(sample: Path) -> None:
+    """Analyze .NET CLR and managed metadata."""
+    try:
+        result = DotNetAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown .NET analysis error"
+        console.print(f"[bold red].NET analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title=".NET CLR Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        ".NET present",
+        "Yes" if data["dotnet_present"] else "No",
+    )
+    summary.add_row(
+        "CLR header",
+        "Yes" if data["clr_header_present"] else "No",
+    )
+    summary.add_row(
+        "Metadata",
+        "Yes" if data["metadata_present"] else "No",
+    )
+    summary.add_row(
+        "Runtime",
+        str(data["runtime_version"] or "-"),
+    )
+    summary.add_row(
+        "CLR header size",
+        str(data["clr_header_size"]),
+    )
+    summary.add_row(
+        "CLR flags",
+        ", ".join(data["clr_flag_names"]) or "-",
+    )
+    summary.add_row(
+        "IL only",
+        "Yes" if data["il_only"] else "No",
+    )
+    summary.add_row(
+        "32-bit required",
+        "Yes" if data["thirty_two_bit_required"] else "No",
+    )
+    summary.add_row(
+        "32-bit preferred",
+        "Yes" if data["thirty_two_bit_preferred"] else "No",
+    )
+    summary.add_row(
+        "Strong-name signed",
+        "Yes" if data["strong_name_signed"] else "No",
+    )
+    summary.add_row(
+        "Native entry point",
+        "Yes" if data["native_entry_point"] else "No",
+    )
+    summary.add_row(
+        "Mixed mode",
+        "Yes" if data["mixed_mode"] else "No",
+    )
+    summary.add_row(
+        "Entry-point token",
+        (
+            f"0x{int(data['entry_point_token']):08x}"
+            if data["entry_point_token"] is not None
+            else "-"
+        ),
+    )
+    summary.add_row(
+        "Entry-point RVA",
+        (f"0x{int(data['entry_point_rva']):x}" if data["entry_point_rva"] is not None else "-"),
+    )
+    summary.add_row(
+        "Metadata version",
+        str(data["metadata_version"] or "-"),
+    )
+    summary.add_row(
+        "Assembly",
+        str(data["assembly_name"] or "-"),
+    )
+    summary.add_row(
+        "Assembly version",
+        str(data["assembly_version"] or "-"),
+    )
+    summary.add_row(
+        "Module",
+        str(data["module_name"] or "-"),
+    )
+    summary.add_row(
+        "Streams",
+        str(data["stream_count"]),
+    )
+    summary.add_row(
+        "Assembly references",
+        str(data["assembly_reference_count"]),
+    )
+    summary.add_row(
+        "Type definitions",
+        str(data["type_definition_count"]),
+    )
+    summary.add_row(
+        "Method definitions",
+        str(data["method_definition_count"]),
+    )
+    summary.add_row(
+        "Member references",
+        str(data["member_reference_count"]),
+    )
+    summary.add_row(
+        "P/Invoke methods",
+        str(data["pinvoke_method_count"]),
+    )
+    summary.add_row(
+        "Malformed metadata",
+        "Yes" if data["malformed_metadata"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["streams"]:
+        streams = Table(title=f".NET Metadata Streams ({len(data['streams'])})")
+        streams.add_column("Name", style="cyan")
+        streams.add_column("Offset")
+        streams.add_column("Size", justify="right")
+
+        for stream in data["streams"]:
+            streams.add_row(
+                str(stream["name"]),
+                f"0x{int(stream['offset']):x}",
+                str(stream["size"]),
+            )
+
+        console.print(streams)
+
+    if data["assembly_references"]:
+        references = Table(title=f"Assembly References ({len(data['assembly_references'])})")
+        references.add_column("Assembly", style="cyan")
+        references.add_column("Version")
+        references.add_column("Culture")
+
+        for reference in data["assembly_references"]:
+            references.add_row(
+                str(reference["name"]),
+                str(reference["version"] or "-"),
+                str(reference["culture"] or "-"),
+            )
+
+        console.print(references)
+
+    if not result.findings:
+        console.print("[green]No suspicious .NET CLR indicators detected.[/green]")
+        return
+
+    findings = Table(title=f".NET Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(
+            severity,
+            "white",
+        )
 
         findings.add_row(
             f"[{style}]{severity.upper()}[/{style}]",
