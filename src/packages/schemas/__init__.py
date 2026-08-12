@@ -56,6 +56,11 @@ from packages.schemas.pe import (
     PEImport,
     PESection,
 )
+from packages.schemas.relocations import (
+    RelocationAnalysisData,
+    RelocationBlock,
+    RelocationEntry,
+)
 from packages.schemas.report import (
     AnalysisReport,
     AnalyzerExecution,
@@ -138,6 +143,9 @@ __all__ = [
     "PackerAnalysisData",
     "PackerCandidate",
     "PackerIndicator",
+    "RelocationAnalysisData",
+    "RelocationBlock",
+    "RelocationEntry",
     "ResourceAnalysisData",
     "ResourceEntry",
     "ResourceType",

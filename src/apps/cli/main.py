@@ -20,6 +20,7 @@ from analyzers.metadata import MetadataAnalyzer
 from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.relocations import RelocationsAnalyzer
 from analyzers.resources import ResourcesAnalyzer
 from analyzers.richheader import RichHeaderAnalyzer
 from analyzers.sections import SectionsAnalyzer
@@ -1977,6 +1978,133 @@ def versioninfo(sample: Path) -> None:
         return
 
     findings = Table(title=f"Version Information Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def relocations(sample: Path) -> None:
+    """Analyze PE base-relocation metadata."""
+    try:
+        result = RelocationsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown relocation-analysis error"
+        console.print(f"[bold red]Relocation analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Relocation Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Relocation directory",
+        "Yes" if data["relocation_directory_present"] else "No",
+    )
+    summary.add_row(
+        "Blocks",
+        str(data["block_count"]),
+    )
+    summary.add_row(
+        "Relocations",
+        str(data["relocation_count"]),
+    )
+    summary.add_row(
+        "Mapped",
+        str(data["mapped_relocation_count"]),
+    )
+    summary.add_row(
+        "Executable",
+        str(data["executable_relocation_count"]),
+    )
+    summary.add_row(
+        "Writable",
+        str(data["writable_relocation_count"]),
+    )
+    summary.add_row(
+        "Malformed",
+        str(data["malformed_relocation_count"]),
+    )
+    summary.add_row(
+        "Unknown types",
+        str(data["unknown_type_count"]),
+    )
+    summary.add_row(
+        "Types",
+        ", ".join(data["relocation_types"]) or "-",
+    )
+    summary.add_row(
+        "Large table",
+        "Yes" if data["unusually_large_relocation_table"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["blocks"]:
+        table = Table(title=f"Relocation Blocks ({len(data['blocks'])})")
+        table.add_column("Index", justify="right")
+        table.add_column("Page RVA")
+        table.add_column("Block size")
+        table.add_column("Entries")
+        table.add_column("Malformed")
+
+        for block in data["blocks"][:100]:
+            table.add_row(
+                str(block["index"]),
+                f"0x{int(block['page_rva']):x}",
+                str(block["block_size"]),
+                str(block["entry_count"]),
+                str(block["malformed_entry_count"]),
+            )
+
+        console.print(table)
+
+        if len(data["blocks"]) > 100:
+            console.print(
+                f"[dim]Showing the first 100 of {len(data['blocks'])} relocation blocks.[/dim]"
+            )
+
+    if not result.findings:
+        console.print("[green]No suspicious PE relocation indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Relocation Findings ({len(result.findings)})")
     findings.add_column("Severity", justify="center")
     findings.add_column("Finding")
     findings.add_column("Confidence", justify="right")

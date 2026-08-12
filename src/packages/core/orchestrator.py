@@ -17,6 +17,7 @@ from analyzers.metadata import MetadataAnalyzer
 from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
+from analyzers.relocations import RelocationsAnalyzer
 from analyzers.resources import ResourcesAnalyzer
 from analyzers.richheader import RichHeaderAnalyzer
 from analyzers.sections import SectionsAnalyzer
@@ -87,6 +88,7 @@ class AnalysisOrchestrator:
                 LoadConfigAnalyzer(),
                 ExportsAnalyzer(),
                 ImportDirectoriesAnalyzer(),
+                RelocationsAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
