@@ -13,6 +13,7 @@ from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
+from analyzers.importdirectories import ImportDirectoriesAnalyzer
 from analyzers.ioc import IOCAnalyzer
 from analyzers.loadconfig import LoadConfigAnalyzer
 from analyzers.metadata import MetadataAnalyzer
@@ -1991,6 +1992,139 @@ def versioninfo(sample: Path) -> None:
     for finding in result.findings:
         severity = finding.severity.value
         style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def importdirectories(sample: Path) -> None:
+    """Analyze PE delay-import and bound-import directories."""
+    try:
+        result = ImportDirectoriesAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown import-directory analysis error"
+        )
+        console.print(f"[bold red]Import-directory analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Delay/Bound Import Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Delay-import directory",
+        "Yes" if data["delay_import_directory_present"] else "No",
+    )
+    summary.add_row(
+        "Bound-import directory",
+        "Yes" if data["bound_import_directory_present"] else "No",
+    )
+    summary.add_row(
+        "Delay libraries",
+        str(data["delay_library_count"]),
+    )
+    summary.add_row(
+        "Delay imports",
+        str(data["delay_import_count"]),
+    )
+    summary.add_row(
+        "Suspicious delay imports",
+        str(data["suspicious_delay_import_count"]),
+    )
+    summary.add_row(
+        "Bound libraries",
+        str(data["bound_library_count"]),
+    )
+    summary.add_row(
+        "Malformed bound imports",
+        str(data["malformed_bound_import_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["delay_libraries"]:
+        delay_table = Table(title="Delay Imports")
+        delay_table.add_column("Library", style="cyan")
+        delay_table.add_column("Name")
+        delay_table.add_column("Ordinal")
+        delay_table.add_column("Address")
+        delay_table.add_column("Suspicious")
+
+        for library in data["delay_libraries"]:
+            for imported in library["imports"]:
+                delay_table.add_row(
+                    str(library["library"]),
+                    str(imported["name"] or "-"),
+                    (str(imported["ordinal"]) if imported["ordinal"] is not None else "-"),
+                    f"0x{int(imported['address']):x}",
+                    "Yes" if imported["suspicious"] else "No",
+                )
+
+        console.print(delay_table)
+
+    if data["bound_imports"]:
+        bound_table = Table(title="Bound Imports")
+        bound_table.add_column("Library", style="cyan")
+        bound_table.add_column("Timestamp")
+        bound_table.add_column("Forwarders")
+        bound_table.add_column("Malformed")
+
+        for bound in data["bound_imports"]:
+            bound_table.add_row(
+                str(bound["library"]),
+                str(bound["timestamp"]),
+                str(bound["forwarder_count"]),
+                "Yes" if bound["malformed"] else "No",
+            )
+
+        console.print(bound_table)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE delay/bound import indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Import Directory Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(
+            severity,
+            "white",
+        )
 
         findings.add_row(
             f"[{style}]{severity.upper()}[/{style}]",

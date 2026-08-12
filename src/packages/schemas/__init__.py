@@ -18,6 +18,12 @@ from packages.schemas.exports import (
     ExportEntry,
 )
 from packages.schemas.filetype import FileTypeResult
+from packages.schemas.importdirectories import (
+    BoundImportEntry,
+    DelayImportEntry,
+    DelayImportLibrary,
+    ImportDirectoryAnalysisData,
+)
 from packages.schemas.imports import (
     ImportAnalysisData,
     ImportBehaviorSummary,
@@ -96,9 +102,12 @@ __all__ = [
     "AnalysisStatus",
     "AnalyzerError",
     "AnalyzerExecution",
+    "BoundImportEntry",
     "CertificateInfo",
     "DebugAnalysisData",
     "DebugDirectoryEntry",
+    "DelayImportEntry",
+    "DelayImportLibrary",
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",
@@ -114,6 +123,7 @@ __all__ = [
     "IOCType",
     "ImportAnalysisData",
     "ImportBehaviorSummary",
+    "ImportDirectoryAnalysisData",
     "ImportIndicator",
     "LoadConfigAnalysisData",
     "MetadataAnalysisData",
