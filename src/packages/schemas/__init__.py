@@ -13,6 +13,10 @@ from packages.schemas.debug import (
     DebugDirectoryEntry,
 )
 from packages.schemas.entropy import EntropyAnalysisData, EntropyRegion
+from packages.schemas.exports import (
+    ExportAnalysisData,
+    ExportEntry,
+)
 from packages.schemas.filetype import FileTypeResult
 from packages.schemas.imports import (
     ImportAnalysisData,
@@ -98,6 +102,8 @@ __all__ = [
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",
+    "ExportAnalysisData",
+    "ExportEntry",
     "ExtractedString",
     "FileHashes",
     "FileTypeResult",

@@ -11,6 +11,7 @@ from rich.table import Table
 
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.entropy import EntropyAnalyzer
+from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.ioc import IOCAnalyzer
 from analyzers.loadconfig import LoadConfigAnalyzer
@@ -1574,6 +1575,173 @@ def overlay(sample: Path) -> None:
     for finding in result.findings:
         severity = finding.severity.value
         style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def exports(sample: Path) -> None:
+    """Analyze PE export-directory metadata and symbols."""
+    try:
+        result = ExportsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown export-analysis error"
+        console.print(f"[bold red]Export analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Export Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Export directory present",
+        "Yes" if data["export_directory_present"] else "No",
+    )
+    summary.add_row(
+        "Module",
+        str(data["module_name"] or "-"),
+    )
+    summary.add_row(
+        "Exports",
+        str(data["export_count"]),
+    )
+    summary.add_row(
+        "Named",
+        str(data["named_export_count"]),
+    )
+    summary.add_row(
+        "Ordinal only",
+        str(data["ordinal_only_count"]),
+    )
+    summary.add_row(
+        "Forwarded",
+        str(data["forwarded_export_count"]),
+    )
+    summary.add_row(
+        "Executable",
+        str(data["executable_export_count"]),
+    )
+    summary.add_row(
+        "Unmapped",
+        str(data["unmapped_export_count"]),
+    )
+    summary.add_row(
+        "Suspicious names",
+        str(data["suspicious_name_count"]),
+    )
+    summary.add_row(
+        "Malformed",
+        str(data["malformed_export_count"]),
+    )
+    summary.add_row(
+        "Duplicate names",
+        str(data["duplicate_name_count"]),
+    )
+    summary.add_row(
+        "Duplicate ordinals",
+        str(data["duplicate_ordinal_count"]),
+    )
+    summary.add_row(
+        "Large export table",
+        "Yes" if data["unusually_large_export_table"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    entries = data["exports"]
+
+    if entries:
+        table = Table(title=f"PE Exports ({len(entries)})")
+        table.add_column(
+            "Ordinal",
+            justify="right",
+        )
+        table.add_column("Name")
+        table.add_column("RVA")
+        table.add_column("Section")
+        table.add_column("Forwarder")
+        table.add_column("Flags")
+
+        for entry in entries[:200]:
+            flags: list[str] = []
+
+            if entry["is_executable"]:
+                flags.append("Executable")
+
+            if entry["is_forwarded"]:
+                flags.append("Forwarded")
+
+            if entry["suspicious_name"]:
+                flags.append("Suspicious name")
+
+            if entry["malformed"]:
+                flags.append("Malformed")
+
+            table.add_row(
+                str(entry["ordinal"]),
+                str(entry["name"] or "-"),
+                f"0x{int(entry['rva']):x}",
+                str(entry["section_name"] or "-"),
+                str(entry["forwarder"] or "-"),
+                ", ".join(flags) or "-",
+            )
+
+        console.print(table)
+
+        if len(entries) > 200:
+            console.print(f"[dim]Showing the first 200 of {len(entries)} exports.[/dim]")
+
+    if not result.findings:
+        console.print("[green]No suspicious PE export indicators detected.[/green]")
+        return
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    findings = Table(title=f"Export Findings ({len(result.findings)})")
+    findings.add_column(
+        "Severity",
+        justify="center",
+    )
+    findings.add_column("Finding")
+    findings.add_column(
+        "Confidence",
+        justify="right",
+    )
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(
+            severity,
+            "white",
+        )
 
         findings.add_row(
             f"[{style}]{severity.upper()}[/{style}]",

@@ -86,6 +86,7 @@ def test_orchestrator_runs_pe_pipeline(
         _completed_result("loadconfig"),
         _completed_result("imports"),
         _completed_result("packer"),
+        _completed_result("exports"),
     )
 
     with (
@@ -107,11 +108,11 @@ def test_orchestrator_runs_pe_pipeline(
 
     assert report.original_name == "sample.exe"
     assert report.file_type.detected_family == "pe"
-    assert len(report.analyzer_results) == 17
-    assert report.completed_analyzers == 17
+    assert len(report.analyzer_results) == 18
+    assert report.completed_analyzers == 18
     assert report.failed_analyzers == 0
     assert report.findings == (finding,)
-    assert len(report.analyzer_executions) == 17
+    assert len(report.analyzer_executions) == 18
 
 
 def test_orchestrator_reuses_strings_result(

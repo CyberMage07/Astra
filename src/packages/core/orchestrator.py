@@ -7,6 +7,7 @@ from pathlib import Path
 
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.entropy import EntropyAnalyzer
+from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.hashing import calculate_hashes
 from analyzers.ioc import IOCAnalyzer
@@ -83,6 +84,7 @@ class AnalysisOrchestrator:
                 RichHeaderAnalyzer(),
                 DebugDirectoryAnalyzer(),
                 LoadConfigAnalyzer(),
+                ExportsAnalyzer(),
                 MetadataAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
