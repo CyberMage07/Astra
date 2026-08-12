@@ -13,7 +13,9 @@ from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.filetype import identify_file
 from analyzers.ioc import IOCAnalyzer
+from analyzers.loadconfig import LoadConfigAnalyzer
 from analyzers.metadata import MetadataAnalyzer
+from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
 from analyzers.pe import PEAnalyzer
 from analyzers.resources import ResourcesAnalyzer
@@ -22,6 +24,8 @@ from analyzers.sections import SectionsAnalyzer
 from analyzers.signature import SignatureAnalyzer
 from analyzers.signatures import ImportAnalyzer
 from analyzers.strings import StringsAnalyzer
+from analyzers.tls import TLSAnalyzer
+from analyzers.versioninfo import VersionInfoAnalyzer
 from analyzers.yara import YaraAnalyzer
 from packages.config import get_settings
 from packages.core import AnalysisOrchestrator, doctor_passed, ingest_sample, run_doctor_checks
@@ -1455,6 +1459,483 @@ def richheader(sample: Path) -> None:
             severity,
             "white",
         )
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def overlay(sample: Path) -> None:
+    """Analyze PE overlay and appended-file data."""
+    try:
+        result = OverlayAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown overlay-analysis error"
+        console.print(f"[bold red]Overlay analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Overlay Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Overlay present",
+        "Yes" if data["overlay_present"] else "No",
+    )
+    summary.add_row(
+        "Offset",
+        (f"0x{data['offset']:x}" if data["offset"] is not None else "-"),
+    )
+    summary.add_row(
+        "Size",
+        f"{int(data['size']):,} bytes",
+    )
+    summary.add_row(
+        "Percentage",
+        f"{float(data['percentage_of_file']):.2f}%",
+    )
+    summary.add_row(
+        "Entropy",
+        (f"{float(data['entropy']):.4f}" if data["entropy"] is not None else "-"),
+    )
+    summary.add_row(
+        "Embedded type",
+        str(data["embedded_file_type"] or "-"),
+    )
+    summary.add_row(
+        "Executable",
+        "Yes" if data["is_executable"] else "No",
+    )
+    summary.add_row(
+        "Archive",
+        "Yes" if data["is_archive"] else "No",
+    )
+    summary.add_row(
+        "Certificate table",
+        "Yes" if data["is_certificate_table"] else "No",
+    )
+    summary.add_row(
+        "Installer payload",
+        "Yes" if data["is_installer_payload"] else "No",
+    )
+    summary.add_row(
+        "Installer type",
+        str(data["installer_type"] or "-"),
+    )
+    summary.add_row(
+        "High entropy",
+        "Yes" if data["is_high_entropy"] else "No",
+    )
+    summary.add_row(
+        "Large",
+        "Yes" if data["is_large"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE overlay indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Overlay Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def tls(sample: Path) -> None:
+    """Analyze PE TLS callbacks and execution-flow metadata."""
+    try:
+        result = TLSAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown TLS-analysis error"
+        console.print(f"[bold red]TLS analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE TLS Callback Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "TLS present",
+        "Yes" if data["tls_present"] else "No",
+    )
+    summary.add_row(
+        "Callbacks",
+        str(data["callback_count"]),
+    )
+    summary.add_row(
+        "Mapped callbacks",
+        str(data["mapped_callbacks"]),
+    )
+    summary.add_row(
+        "Executable callbacks",
+        str(data["executable_callbacks"]),
+    )
+    summary.add_row(
+        "Writable callbacks",
+        str(data["writable_callbacks"]),
+    )
+    summary.add_row(
+        "Outside image",
+        str(data["outside_image_callbacks"]),
+    )
+    summary.add_row(
+        "Suspicious callbacks",
+        str(data["suspicious_callbacks"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    callbacks = data["callbacks"]
+
+    if callbacks:
+        table = Table(title=f"TLS Callbacks ({len(callbacks)})")
+        table.add_column("Index", justify="right")
+        table.add_column("Virtual address")
+        table.add_column("RVA")
+        table.add_column("File offset")
+        table.add_column("Section")
+        table.add_column("Flags")
+
+        for callback in callbacks:
+            flags: list[str] = []
+
+            if callback["is_mapped"]:
+                flags.append("Mapped")
+
+            if callback["is_executable"]:
+                flags.append("Executable")
+
+            if callback["is_writable"]:
+                flags.append("Writable")
+
+            if callback["is_outside_image"]:
+                flags.append("Outside image")
+
+            table.add_row(
+                str(callback["index"]),
+                f"0x{int(callback['virtual_address']):x}",
+                f"0x{int(callback['relative_virtual_address']):x}",
+                (
+                    f"0x{int(callback['file_offset']):x}"
+                    if callback["file_offset"] is not None
+                    else "-"
+                ),
+                str(callback["section_name"] or "-"),
+                ", ".join(flags) or "-",
+            )
+
+        console.print(table)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE TLS indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"TLS Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def versioninfo(sample: Path) -> None:
+    """Analyze PE version-information metadata."""
+    try:
+        result = VersionInfoAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown version-info analysis error"
+        )
+        console.print(f"[bold red]Version-info analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Version Information Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Version info present",
+        "Yes" if data["version_info_present"] else "No",
+    )
+    summary.add_row(
+        "Company",
+        str(data["company_name"] or "-"),
+    )
+    summary.add_row(
+        "Description",
+        str(data["file_description"] or "-"),
+    )
+    summary.add_row(
+        "File version",
+        str(data["file_version"] or "-"),
+    )
+    summary.add_row(
+        "Original filename",
+        str(data["original_filename"] or "-"),
+    )
+    summary.add_row(
+        "Product",
+        str(data["product_name"] or "-"),
+    )
+    summary.add_row(
+        "Product version",
+        str(data["product_version"] or "-"),
+    )
+    summary.add_row(
+        "Filename matches",
+        (
+            "Yes"
+            if data["original_filename_matches"] is True
+            else ("No" if data["original_filename_matches"] is False else "Unknown")
+        ),
+    )
+    summary.add_row(
+        "Suspicious company",
+        "Yes" if data["suspicious_company_name"] else "No",
+    )
+    summary.add_row(
+        "Suspicious product",
+        "Yes" if data["suspicious_product_name"] else "No",
+    )
+    summary.add_row(
+        "Missing identity fields",
+        "Yes" if data["missing_identity_fields"] else "No",
+    )
+    summary.add_row(
+        "Version strings",
+        str(data["string_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE version-information indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Version Information Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def loadconfig(sample: Path) -> None:
+    """Analyze PE load configuration and binary mitigations."""
+    try:
+        result = LoadConfigAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown load-config analysis error"
+        )
+        console.print(f"[bold red]Load-config analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Load Configuration Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Load config present",
+        "Yes" if data["load_config_present"] else "No",
+    )
+    summary.add_row(
+        "Size",
+        f"{int(data['size']):,} bytes",
+    )
+    summary.add_row(
+        "Security cookie",
+        "Yes" if data["security_cookie_present"] else "No",
+    )
+    summary.add_row(
+        "Control Flow Guard",
+        "Yes" if data["control_flow_guard_enabled"] else "No",
+    )
+    summary.add_row(
+        "Guard flags",
+        ", ".join(data["guard_flag_names"]) or "-",
+    )
+    summary.add_row(
+        "Guard functions",
+        str(data["guard_cf_function_count"]),
+    )
+    summary.add_row(
+        "SafeSEH applicable",
+        "Yes" if data["safe_seh_applicable"] else "No",
+    )
+    summary.add_row(
+        "SafeSEH present",
+        "Yes" if data["safe_seh_present"] else "No",
+    )
+    summary.add_row(
+        "SEH handlers",
+        str(data["seh_handler_count"]),
+    )
+    summary.add_row(
+        "Code integrity",
+        "Yes" if data["code_integrity_present"] else "No",
+    )
+    summary.add_row(
+        "Malformed",
+        "Yes" if data["malformed"] else "No",
+    )
+    summary.add_row(
+        "Invalid pointers",
+        str(data["invalid_pointer_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE load-configuration indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Load Configuration Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(severity, "white")
 
         findings.add_row(
             f"[{style}]{severity.upper()}[/{style}]",
