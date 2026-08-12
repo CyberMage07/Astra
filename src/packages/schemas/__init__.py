@@ -43,6 +43,10 @@ from packages.schemas.ioc import (
 from packages.schemas.loadconfig import (
     LoadConfigAnalysisData,
 )
+from packages.schemas.manifest import (
+    ManifestAnalysisData,
+    ManifestDependency,
+)
 from packages.schemas.metadata import (
     MetadataAnalysisData,
     MetadataEntry,
@@ -139,6 +143,8 @@ __all__ = [
     "ImportDirectoryAnalysisData",
     "ImportIndicator",
     "LoadConfigAnalysisData",
+    "ManifestAnalysisData",
+    "ManifestDependency",
     "MetadataAnalysisData",
     "MetadataEntry",
     "MetadataSource",

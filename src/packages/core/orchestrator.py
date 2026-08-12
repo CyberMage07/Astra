@@ -14,6 +14,7 @@ from analyzers.hashing import calculate_hashes
 from analyzers.importdirectories import ImportDirectoriesAnalyzer
 from analyzers.ioc import IOCAnalyzer
 from analyzers.loadconfig import LoadConfigAnalyzer
+from analyzers.manifest import ManifestAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
@@ -85,6 +86,7 @@ class AnalysisOrchestrator:
                 TLSAnalyzer(),
                 SignatureAnalyzer(),
                 VersionInfoAnalyzer(),
+                ManifestAnalyzer(),
                 RichHeaderAnalyzer(),
                 DebugDirectoryAnalyzer(),
                 LoadConfigAnalyzer(),

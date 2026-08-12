@@ -17,6 +17,7 @@ from analyzers.filetype import identify_file
 from analyzers.importdirectories import ImportDirectoriesAnalyzer
 from analyzers.ioc import IOCAnalyzer
 from analyzers.loadconfig import LoadConfigAnalyzer
+from analyzers.manifest import ManifestAnalyzer
 from analyzers.metadata import MetadataAnalyzer
 from analyzers.overlay import OverlayAnalyzer
 from analyzers.packer import PackerAnalyzer
@@ -1738,6 +1739,162 @@ def exports(sample: Path) -> None:
         "Confidence",
         justify="right",
     )
+
+    for finding in result.findings:
+        severity = finding.severity.value
+        style = severity_styles.get(
+            severity,
+            "white",
+        )
+
+        findings.add_row(
+            f"[{style}]{severity.upper()}[/{style}]",
+            finding.title,
+            f"{finding.confidence}%",
+        )
+
+    console.print(findings)
+
+
+@app.command()
+def manifest(sample: Path) -> None:
+    """Analyze Windows PE application manifest metadata."""
+    try:
+        result = ManifestAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown manifest-analysis error"
+        console.print(f"[bold red]Manifest analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Application Manifest Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Manifest present",
+        "Yes" if data["manifest_present"] else "No",
+    )
+    summary.add_row(
+        "Manifest count",
+        str(data["manifest_count"]),
+    )
+    summary.add_row(
+        "Execution level",
+        str(data["requested_execution_level"] or "-"),
+    )
+    summary.add_row(
+        "UIAccess",
+        ("Yes" if data["ui_access"] is True else "No" if data["ui_access"] is False else "-"),
+    )
+    summary.add_row(
+        "Requires administrator",
+        "Yes" if data["requires_administrator"] else "No",
+    )
+    summary.add_row(
+        "Highest available",
+        "Yes" if data["highest_available"] else "No",
+    )
+    summary.add_row(
+        "As invoker",
+        "Yes" if data["as_invoker"] else "No",
+    )
+    summary.add_row(
+        "Auto elevate",
+        "Yes" if data["auto_elevate"] else "No",
+    )
+    summary.add_row(
+        "DPI aware",
+        ("Yes" if data["dpi_aware"] is True else "No" if data["dpi_aware"] is False else "-"),
+    )
+    summary.add_row(
+        "Long path aware",
+        (
+            "Yes"
+            if data["long_path_aware"] is True
+            else "No"
+            if data["long_path_aware"] is False
+            else "-"
+        ),
+    )
+    summary.add_row(
+        "Supported OS entries",
+        str(data["supported_os_count"]),
+    )
+    summary.add_row(
+        "Dependencies",
+        str(data["dependency_count"]),
+    )
+    summary.add_row(
+        "Requested privileges",
+        "Yes" if data["requested_privileges_present"] else "No",
+    )
+    summary.add_row(
+        "Malformed",
+        "Yes" if data["malformed"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["supported_os_ids"]:
+        os_table = Table(title="Supported Windows OS Identifiers")
+        os_table.add_column("Identifier", style="cyan")
+
+        for os_id in data["supported_os_ids"]:
+            os_table.add_row(str(os_id))
+
+        console.print(os_table)
+
+    if data["dependencies"]:
+        dependencies = Table(title=f"Manifest Dependencies ({len(data['dependencies'])})")
+        dependencies.add_column("Name", style="cyan")
+        dependencies.add_column("Version")
+        dependencies.add_column("Architecture")
+        dependencies.add_column("Public Key Token")
+        dependencies.add_column("Type")
+
+        for dependency in data["dependencies"]:
+            dependencies.add_row(
+                str(dependency["name"]),
+                str(dependency["version"] or "-"),
+                str(dependency["processor_architecture"] or "-"),
+                str(dependency["public_key_token"] or "-"),
+                str(dependency["dependency_type"] or "-"),
+            )
+
+        console.print(dependencies)
+
+    if not result.findings:
+        console.print("[green]No suspicious PE manifest indicators detected.[/green]")
+        return
+
+    findings = Table(title=f"Manifest Findings ({len(result.findings)})")
+    findings.add_column("Severity", justify="center")
+    findings.add_column("Finding")
+    findings.add_column("Confidence", justify="right")
+
+    severity_styles = {
+        "info": "blue",
+        "low": "green",
+        "medium": "yellow",
+        "high": "red",
+        "critical": "bold white on red",
+    }
 
     for finding in result.findings:
         severity = finding.severity.value
