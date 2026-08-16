@@ -12,6 +12,7 @@ from rich.table import Table
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elfsymbols import ELFSymbolsAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
@@ -2936,6 +2937,135 @@ def elf(sample: Path) -> None:
         console.print(findings)
     else:
         console.print("[green]No suspicious ELF indicators detected.[/green]")
+
+
+@app.command()
+def elfsymbols(sample: Path) -> None:
+    """Analyze ELF symbols, imports, exports, and capabilities."""
+    try:
+        result = ELFSymbolsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown ELF symbol analysis error"
+
+        console.print(f"[bold red]ELF symbol analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Symbol Analysis",
+        show_header=False,
+    )
+
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column(
+        "Value",
+    )
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Symbol tables",
+        ("Yes" if data["symbol_tables_present"] else "No"),
+    )
+    summary.add_row(
+        "Symbols",
+        str(data["symbol_count"]),
+    )
+    summary.add_row(
+        "Dynamic symbols",
+        str(data["dynamic_symbol_count"]),
+    )
+    summary.add_row(
+        "Static symbols",
+        str(data["static_symbol_count"]),
+    )
+    summary.add_row(
+        "Imports",
+        str(data["import_count"]),
+    )
+    summary.add_row(
+        "Exports",
+        str(data["export_count"]),
+    )
+    summary.add_row(
+        "Weak symbols",
+        str(data["weak_symbol_count"]),
+    )
+    summary.add_row(
+        "Suspicious symbols",
+        str(data["suspicious_symbol_count"]),
+    )
+    summary.add_row(
+        "Duplicate symbols",
+        str(data["duplicate_symbol_count"]),
+    )
+    summary.add_row(
+        "Malformed symbols",
+        str(data["malformed_symbol_count"]),
+    )
+    summary.add_row(
+        "Stripped",
+        ("Yes" if data["stripped"] else "No"),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    suspicious_symbols = [symbol for symbol in data["symbols"] if symbol["suspicious"]]
+
+    if suspicious_symbols:
+        symbol_table = Table(title=(f"Capability-Bearing ELF Imports ({len(suspicious_symbols)})"))
+
+        symbol_table.add_column("Symbol")
+        symbol_table.add_column("Category")
+        symbol_table.add_column("Binding")
+        symbol_table.add_column("Type")
+
+        for symbol in suspicious_symbols:
+            symbol_table.add_row(
+                str(symbol["name"]),
+                str(symbol["suspicious_category"] or "-"),
+                str(symbol["binding"]),
+                str(symbol["symbol_type"]),
+            )
+
+        console.print(symbol_table)
+
+    if result.findings:
+        findings_table = Table(title=(f"ELF Symbol Findings ({len(result.findings)})"))
+
+        findings_table.add_column("Severity")
+        findings_table.add_column("Category")
+        findings_table.add_column("Finding")
+        findings_table.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        for finding in result.findings:
+            findings_table.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings_table)
+
+    else:
+        console.print("[green]No suspicious ELF symbol capabilities detected.[/green]")
 
 
 @app.command()

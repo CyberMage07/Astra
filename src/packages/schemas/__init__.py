@@ -25,6 +25,10 @@ from packages.schemas.elf import (
     ELFSecurityInfo,
     ELFSegment,
 )
+from packages.schemas.elfsymbols import (
+    ELFSymbolAnalysisData,
+    ELFSymbolEntry,
+)
 from packages.schemas.embedded import (
     EmbeddedAnalysisData,
     EmbeddedAnalysisLimits,
@@ -152,6 +156,8 @@ __all__ = [
     "ELFSection",
     "ELFSecurityInfo",
     "ELFSegment",
+    "ELFSymbolAnalysisData",
+    "ELFSymbolEntry",
     "EmbeddedAnalysisData",
     "EmbeddedAnalysisLimits",
     "EmbeddedPayloadAnalysisSummary",

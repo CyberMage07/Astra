@@ -8,6 +8,7 @@ from pathlib import Path
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elfsymbols import ELFSymbolsAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
@@ -62,14 +63,12 @@ class AnalysisOrchestrator:
             include_embedded=False,
         )
 
-    def _run_analyzers(
+    def _run_common_analyzers(
         self,
         sample_path: Path,
         family: str,
-        *,
-        include_embedded: bool = True,
-    ) -> tuple[AnalysisResult, ...]:
-        """Run analyzers relevant to the detected file family."""
+    ) -> list[AnalysisResult]:
+        """Run format-independent analyzers."""
         results: list[AnalysisResult] = []
 
         strings_analyzer = StringsAnalyzer()
@@ -87,46 +86,93 @@ class AnalysisOrchestrator:
             YaraAnalyzer(self.rules_root),
         )
 
-        for general_analyzer in general_analyzers:
-            if general_analyzer.supports(family):
-                results.append(general_analyzer.analyze(sample_path))
+        for analyzer in general_analyzers:
+            if analyzer.supports(family):
+                results.append(analyzer.analyze(sample_path))
 
-        if family == "pe":
-            pe_analyzers = (
-                PEAnalyzer(),
-                DotNetAnalyzer(),
-                SectionsAnalyzer(),
-                ResourcesAnalyzer(),
-                OverlayAnalyzer(),
-                TLSAnalyzer(),
-                SignatureAnalyzer(),
-                VersionInfoAnalyzer(),
-                ManifestAnalyzer(),
-                RichHeaderAnalyzer(),
-                DebugDirectoryAnalyzer(),
-                LoadConfigAnalyzer(),
-                ExportsAnalyzer(),
-                ImportDirectoriesAnalyzer(),
-                RelocationsAnalyzer(),
-                MetadataAnalyzer(),
-                FingerprintsAnalyzer(),
-                ImportAnalyzer(),
-                PackerAnalyzer(),
+        return results
+
+    def _run_pe_analyzers(
+        self,
+        sample_path: Path,
+        *,
+        include_embedded: bool,
+    ) -> list[AnalysisResult]:
+        """Run Windows PE-specific analyzers."""
+        results: list[AnalysisResult] = []
+
+        pe_analyzers = (
+            PEAnalyzer(),
+            DotNetAnalyzer(),
+            SectionsAnalyzer(),
+            ResourcesAnalyzer(),
+            OverlayAnalyzer(),
+            TLSAnalyzer(),
+            SignatureAnalyzer(),
+            VersionInfoAnalyzer(),
+            ManifestAnalyzer(),
+            RichHeaderAnalyzer(),
+            DebugDirectoryAnalyzer(),
+            LoadConfigAnalyzer(),
+            ExportsAnalyzer(),
+            ImportDirectoriesAnalyzer(),
+            RelocationsAnalyzer(),
+            MetadataAnalyzer(),
+            FingerprintsAnalyzer(),
+            ImportAnalyzer(),
+            PackerAnalyzer(),
+        )
+
+        for analyzer in pe_analyzers:
+            results.append(analyzer.analyze(sample_path))
+
+        if include_embedded:
+            results.append(
+                EmbeddedAnalyzer(child_analyzer=(self._analyze_child)).analyze(sample_path)
             )
 
-            for pe_analyzer in pe_analyzers:
-                results.append(pe_analyzer.analyze(sample_path))
+        return results
 
-            if include_embedded:
-                results.append(
-                    EmbeddedAnalyzer(child_analyzer=(self._analyze_child)).analyze(sample_path)
+    @staticmethod
+    def _run_elf_analyzers(
+        sample_path: Path,
+    ) -> list[AnalysisResult]:
+        """Run ELF-specific analyzers."""
+        results: list[AnalysisResult] = []
+
+        elf_analyzers = (
+            ELFAnalyzer(),
+            ELFSymbolsAnalyzer(),
+        )
+
+        for analyzer in elf_analyzers:
+            results.append(analyzer.analyze(sample_path))
+
+        return results
+
+    def _run_analyzers(
+        self,
+        sample_path: Path,
+        family: str,
+        *,
+        include_embedded: bool = True,
+    ) -> tuple[AnalysisResult, ...]:
+        """Run analyzers relevant to the detected file family."""
+        results = self._run_common_analyzers(
+            sample_path,
+            family,
+        )
+
+        if family == "pe":
+            results.extend(
+                self._run_pe_analyzers(
+                    sample_path,
+                    include_embedded=(include_embedded),
                 )
+            )
 
         elif family == "elf":
-            elf_analyzers = (ELFAnalyzer(),)
-
-            for elf_analyzer in elf_analyzers:
-                results.append(elf_analyzer.analyze(sample_path))
+            results.extend(self._run_elf_analyzers(sample_path))
 
         return tuple(results)
 
@@ -139,7 +185,7 @@ class AnalysisOrchestrator:
             AnalyzerExecution(
                 analyzer=result.analyzer,
                 status=result.status.value,
-                duration_ms=result.duration_ms,
+                duration_ms=(result.duration_ms),
                 finding_count=len(result.findings),
                 error_count=len(result.errors),
             )
