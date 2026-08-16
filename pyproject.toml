@@ -26,6 +26,7 @@ dependencies = [
     "platformdirs>=4.0.0",
     "pydantic>=2.5.3",
     "pydantic-settings>=2.0.3",
+    "pyelftools>=0.33",
     "python-magic>=0.4.27",
     "rich>=13.8.1",
     "structlog>=23.1.0",

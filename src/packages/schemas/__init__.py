@@ -17,6 +17,14 @@ from packages.schemas.dotnet import (
     DotNetAssemblyReference,
     DotNetStreamInfo,
 )
+from packages.schemas.elf import (
+    ELFAnalysisData,
+    ELFDynamicInfo,
+    ELFHeaderInfo,
+    ELFSection,
+    ELFSecurityInfo,
+    ELFSegment,
+)
 from packages.schemas.embedded import (
     EmbeddedAnalysisData,
     EmbeddedAnalysisLimits,
@@ -138,6 +146,12 @@ __all__ = [
     "DotNetAnalysisData",
     "DotNetAssemblyReference",
     "DotNetStreamInfo",
+    "ELFAnalysisData",
+    "ELFDynamicInfo",
+    "ELFHeaderInfo",
+    "ELFSection",
+    "ELFSecurityInfo",
+    "ELFSegment",
     "EmbeddedAnalysisData",
     "EmbeddedAnalysisLimits",
     "EmbeddedPayloadAnalysisSummary",

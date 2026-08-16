@@ -7,6 +7,7 @@ from pathlib import Path
 
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
+from analyzers.elf import ELFAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
@@ -120,6 +121,12 @@ class AnalysisOrchestrator:
                 results.append(
                     EmbeddedAnalyzer(child_analyzer=(self._analyze_child)).analyze(sample_path)
                 )
+
+        elif family == "elf":
+            elf_analyzers = (ELFAnalyzer(),)
+
+            for elf_analyzer in elf_analyzers:
+                results.append(elf_analyzer.analyze(sample_path))
 
         return tuple(results)
 

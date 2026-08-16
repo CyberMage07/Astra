@@ -11,6 +11,7 @@ from rich.table import Table
 
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
+from analyzers.elf import ELFAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
@@ -2795,6 +2796,146 @@ def dotnet(sample: Path) -> None:
         )
 
     console.print(findings)
+
+
+@app.command()
+def elf(sample: Path) -> None:
+    """Perform foundational static analysis of an ELF file."""
+    try:
+        result = ELFAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown ELF analysis error"
+
+        console.print(f"[bold red]ELF analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+    header = data["header"]
+    dynamic = data["dynamic"]
+    security = data["security"]
+
+    summary = Table(
+        title="ELF Static Analysis",
+        show_header=False,
+    )
+
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column(
+        "Value",
+    )
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Architecture",
+        f"{header['machine']} ({header['architecture_bits']}-bit)",
+    )
+    summary.add_row(
+        "Endian",
+        str(header["endianness"]),
+    )
+    summary.add_row(
+        "Type",
+        str(header["elf_type"]),
+    )
+    summary.add_row(
+        "OS ABI",
+        str(header["os_abi"]),
+    )
+    summary.add_row(
+        "Entry point",
+        f"0x{header['entry_point']:x}",
+    )
+    summary.add_row(
+        "Sections",
+        str(data["section_count"]),
+    )
+    summary.add_row(
+        "Segments",
+        str(data["segment_count"]),
+    )
+    summary.add_row(
+        "Interpreter",
+        dynamic["interpreter"] or "-",
+    )
+    summary.add_row(
+        "Dynamic libraries",
+        str(len(dynamic["needed_libraries"])),
+    )
+    summary.add_row(
+        "PIE",
+        "Yes" if security["pie"] else "No",
+    )
+    summary.add_row(
+        "NX",
+        "Yes" if security["nx_enabled"] else "No",
+    )
+    summary.add_row(
+        "RELRO",
+        ("Full" if security["full_relro"] else ("Partial" if security["relro"] else "No")),
+    )
+    summary.add_row(
+        "Stack canary",
+        "Yes" if security["has_stack_canary"] else "No",
+    )
+    summary.add_row(
+        "Stripped",
+        "Yes" if security["stripped"] else "No",
+    )
+    summary.add_row(
+        "RPATH",
+        dynamic["rpath"] or "-",
+    )
+    summary.add_row(
+        "RUNPATH",
+        dynamic["runpath"] or "-",
+    )
+    summary.add_row(
+        "Malformed",
+        "Yes" if data["malformed"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if dynamic["needed_libraries"]:
+        libraries = Table(title=(f"ELF Required Libraries ({len(dynamic['needed_libraries'])})"))
+
+        libraries.add_column("Library")
+
+        for library in dynamic["needed_libraries"]:
+            libraries.add_row(str(library))
+
+        console.print(libraries)
+
+    if result.findings:
+        findings = Table(title=(f"ELF Findings ({len(result.findings)})"))
+
+        findings.add_column("Severity")
+        findings.add_column("Finding")
+        findings.add_column("Confidence")
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
+    else:
+        console.print("[green]No suspicious ELF indicators detected.[/green]")
 
 
 @app.command()
