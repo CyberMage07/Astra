@@ -12,6 +12,7 @@ from rich.table import Table
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
@@ -2937,6 +2938,151 @@ def elf(sample: Path) -> None:
         console.print(findings)
     else:
         console.print("[green]No suspicious ELF indicators detected.[/green]")
+
+
+@app.command()
+def elfrelocations(sample: Path) -> None:
+    """Analyze ELF relocation sections and entries."""
+    try:
+        result = ELFRelocationsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown ELF relocation analysis error"
+        )
+
+        console.print(f"[bold red]ELF relocation analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Relocation Analysis",
+        show_header=False,
+    )
+
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column(
+        "Value",
+    )
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Relocation sections",
+        ("Yes" if data["relocation_sections_present"] else "No"),
+    )
+    summary.add_row(
+        "Sections",
+        str(data["relocation_section_count"]),
+    )
+    summary.add_row(
+        "Relocations",
+        str(data["relocation_count"]),
+    )
+    summary.add_row(
+        "RELA",
+        str(data["rela_count"]),
+    )
+    summary.add_row(
+        "REL",
+        str(data["rel_count"]),
+    )
+    summary.add_row(
+        "Symbol relocations",
+        str(data["symbol_relocation_count"]),
+    )
+    summary.add_row(
+        "Imported symbol relocations",
+        str(data["imported_symbol_relocation_count"]),
+    )
+    summary.add_row(
+        "PLT relocations",
+        str(data["plt_relocation_count"]),
+    )
+    summary.add_row(
+        "GOT relocations",
+        str(data["got_relocation_count"]),
+    )
+    summary.add_row(
+        "Malformed relocations",
+        str(data["malformed_relocation_count"]),
+    )
+    summary.add_row(
+        "Relocation types",
+        str(len(data["relocation_types"])),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["relocation_types"]:
+        types_table = Table(title=(f"ELF Relocation Types ({len(data['relocation_types'])})"))
+
+        types_table.add_column("Type")
+
+        for relocation_type in data["relocation_types"]:
+            types_table.add_row(str(relocation_type))
+
+        console.print(types_table)
+
+    if data["sections"]:
+        sections_table = Table(title=(f"ELF Relocation Sections ({len(data['sections'])})"))
+
+        sections_table.add_column("Section")
+        sections_table.add_column("Type")
+        sections_table.add_column(
+            "Entries",
+            justify="right",
+        )
+        sections_table.add_column(
+            "Malformed",
+            justify="right",
+        )
+
+        for section in data["sections"]:
+            sections_table.add_row(
+                str(section["name"]),
+                str(section["section_type"]),
+                str(section["entry_count"]),
+                str(section["malformed_entry_count"]),
+            )
+
+        console.print(sections_table)
+
+    if result.findings:
+        findings_table = Table(title=(f"ELF Relocation Findings ({len(result.findings)})"))
+
+        findings_table.add_column("Severity")
+        findings_table.add_column("Category")
+        findings_table.add_column("Finding")
+        findings_table.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        for finding in result.findings:
+            findings_table.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings_table)
+
+    else:
+        console.print("[green]No suspicious ELF relocation indicators detected.[/green]")
 
 
 @app.command()
