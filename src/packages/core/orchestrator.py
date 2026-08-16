@@ -7,6 +7,7 @@ from pathlib import Path
 
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
+from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
@@ -50,10 +51,22 @@ class AnalysisOrchestrator:
         """Initialize the orchestrator."""
         self.rules_root = rules_root.expanduser().resolve()
 
+    def _analyze_child(
+        self,
+        sample_path: Path,
+    ) -> AnalysisReport:
+        """Analyze an extracted child without starting another embedded engine."""
+        return self.analyze(
+            sample_path,
+            include_embedded=False,
+        )
+
     def _run_analyzers(
         self,
         sample_path: Path,
         family: str,
+        *,
+        include_embedded: bool = True,
     ) -> tuple[AnalysisResult, ...]:
         """Run analyzers relevant to the detected file family."""
         results: list[AnalysisResult] = []
@@ -103,6 +116,11 @@ class AnalysisOrchestrator:
             for pe_analyzer in pe_analyzers:
                 results.append(pe_analyzer.analyze(sample_path))
 
+            if include_embedded:
+                results.append(
+                    EmbeddedAnalyzer(child_analyzer=(self._analyze_child)).analyze(sample_path)
+                )
+
         return tuple(results)
 
     @staticmethod
@@ -131,9 +149,12 @@ class AnalysisOrchestrator:
     def analyze(
         self,
         sample_path: Path,
+        *,
+        include_embedded: bool = True,
     ) -> AnalysisReport:
         """Run Astra's unified static-analysis pipeline."""
         start = time.perf_counter()
+
         resolved_path = sample_path.expanduser().resolve()
 
         if not resolved_path.exists():
@@ -143,15 +164,19 @@ class AnalysisOrchestrator:
             raise ValueError(f"Path is not a regular file: {resolved_path}")
 
         file_type = identify_file(resolved_path)
+
         hashes = calculate_hashes(resolved_path)
 
         analyzer_results = self._run_analyzers(
             resolved_path,
             file_type.detected_family,
+            include_embedded=(include_embedded),
         )
 
         executions = self._build_executions(analyzer_results)
+
         findings = self._collect_findings(analyzer_results)
+
         assessment = assess_findings(findings)
 
         completed_analyzers = sum(
@@ -172,15 +197,15 @@ class AnalysisOrchestrator:
 
         return AnalysisReport(
             sample_path=resolved_path,
-            original_name=resolved_path.name,
-            size_bytes=resolved_path.stat().st_size,
+            original_name=(resolved_path.name),
+            size_bytes=(resolved_path.stat().st_size),
             hashes=hashes,
             file_type=file_type,
-            analyzer_results=analyzer_results,
-            analyzer_executions=executions,
+            analyzer_results=(analyzer_results),
+            analyzer_executions=(executions),
             findings=findings,
             assessment=assessment,
-            completed_analyzers=completed_analyzers,
-            failed_analyzers=failed_analyzers,
-            total_duration_ms=total_duration_ms,
+            completed_analyzers=(completed_analyzers),
+            failed_analyzers=(failed_analyzers),
+            total_duration_ms=(total_duration_ms),
         )

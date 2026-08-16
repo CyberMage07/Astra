@@ -11,6 +11,7 @@ from rich.table import Table
 
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
+from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
@@ -2251,6 +2252,222 @@ def versioninfo(sample: Path) -> None:
         )
 
     console.print(findings)
+
+
+@app.command()
+def embedded(sample: Path) -> None:
+    """Discover and recursively analyze embedded payloads."""
+    try:
+        orchestrator = AnalysisOrchestrator()
+
+        analyzer = EmbeddedAnalyzer(
+            child_analyzer=lambda path: orchestrator.analyze(
+                path,
+                include_embedded=False,
+            )
+        )
+
+        result = analyzer.analyze(sample)
+
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown embedded-payload analysis error"
+        )
+
+        console.print(f"[bold red]Embedded analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="Recursive Embedded Payload Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Embedded payloads",
+        "Yes" if data["embedded_payloads_present"] else "No",
+    )
+    summary.add_row(
+        "Payloads",
+        str(data["payload_count"]),
+    )
+    summary.add_row(
+        "Analyzed",
+        str(data["analyzed_payload_count"]),
+    )
+    summary.add_row(
+        "Executables",
+        str(data["executable_payload_count"]),
+    )
+    summary.add_row(
+        "Archives",
+        str(data["archive_payload_count"]),
+    )
+    summary.add_row(
+        "Documents",
+        str(data["document_payload_count"]),
+    )
+    summary.add_row(
+        "Scripts",
+        str(data["script_payload_count"]),
+    )
+    summary.add_row(
+        "Duplicates",
+        str(data["duplicate_payload_count"]),
+    )
+    summary.add_row(
+        "Skipped",
+        str(data["skipped_payload_count"]),
+    )
+    summary.add_row(
+        "Maximum depth",
+        str(data["maximum_depth_reached"]),
+    )
+    summary.add_row(
+        "Extracted bytes",
+        f"{data['total_extracted_bytes']:,}",
+    )
+    summary.add_row(
+        "Recursion limit",
+        "Yes" if data["recursion_limit_reached"] else "No",
+    )
+    summary.add_row(
+        "Payload limit",
+        "Yes" if data["payload_limit_reached"] else "No",
+    )
+    summary.add_row(
+        "Byte limit",
+        "Yes" if data["byte_limit_reached"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["payloads"]:
+        payload_table = Table(title=f"Embedded Payloads ({len(data['payloads'])})")
+
+        payload_table.add_column(
+            "Index",
+            justify="right",
+        )
+        payload_table.add_column(
+            "Parent",
+            justify="right",
+        )
+        payload_table.add_column(
+            "Depth",
+            justify="right",
+        )
+        payload_table.add_column("Source")
+        payload_table.add_column("Family")
+        payload_table.add_column(
+            "Size",
+            justify="right",
+        )
+        payload_table.add_column(
+            "Entropy",
+            justify="right",
+        )
+        payload_table.add_column("SHA-256")
+        payload_table.add_column("Flags")
+        payload_table.add_column("Assessment")
+
+        for payload in data["payloads"]:
+            parent_index = payload["parent_index"]
+
+            flags: list[str] = []
+
+            if payload["duplicate"]:
+                flags.append("duplicate")
+
+            if payload["truncated"]:
+                flags.append("truncated")
+
+            if payload["identity"]["is_executable"]:
+                flags.append("executable")
+
+            analysis = payload["analysis"]
+
+            assessment = "-"
+
+            if analysis["analyzed"]:
+                classification = analysis["classification"] or "unknown"
+
+                risk_score = analysis["risk_score"]
+
+                assessment = classification
+
+                if risk_score is not None:
+                    assessment = f"{classification} ({risk_score}/100)"
+
+            entropy = payload["entropy"]
+
+            payload_table.add_row(
+                str(payload["index"]),
+                ("-" if parent_index is None else str(parent_index)),
+                str(payload["depth"]),
+                str(payload["location"]["source"]),
+                str(payload["identity"]["detected_family"]),
+                f"{payload['location']['size']:,}",
+                ("-" if entropy is None else f"{entropy:.2f}"),
+                str(payload["identity"]["sha256"])[:16] + "...",
+                ", ".join(flags) or "-",
+                assessment,
+            )
+
+        console.print(payload_table)
+
+    if result.findings:
+        findings_table = Table(title=f"Embedded Findings ({len(result.findings)})")
+
+        findings_table.add_column(
+            "Severity",
+            justify="center",
+        )
+        findings_table.add_column("Finding")
+        findings_table.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        severity_styles = {
+            "info": "blue",
+            "low": "green",
+            "medium": "yellow",
+            "high": "red",
+            "critical": "bold white on red",
+        }
+
+        for finding in result.findings:
+            severity = finding.severity.value
+            style = severity_styles.get(
+                severity,
+                "white",
+            )
+
+            findings_table.add_row(
+                f"[{style}]{severity.upper()}[/{style}]",
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings_table)
+
+    else:
+        console.print("[green]No suspicious embedded payload indicators detected.[/green]")
 
 
 @app.command()

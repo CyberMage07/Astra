@@ -17,6 +17,14 @@ from packages.schemas.dotnet import (
     DotNetAssemblyReference,
     DotNetStreamInfo,
 )
+from packages.schemas.embedded import (
+    EmbeddedAnalysisData,
+    EmbeddedAnalysisLimits,
+    EmbeddedPayloadAnalysisSummary,
+    EmbeddedPayloadEntry,
+    EmbeddedPayloadIdentity,
+    EmbeddedPayloadLocation,
+)
 from packages.schemas.entropy import EntropyAnalysisData, EntropyRegion
 from packages.schemas.exports import (
     ExportAnalysisData,
@@ -130,6 +138,12 @@ __all__ = [
     "DotNetAnalysisData",
     "DotNetAssemblyReference",
     "DotNetStreamInfo",
+    "EmbeddedAnalysisData",
+    "EmbeddedAnalysisLimits",
+    "EmbeddedPayloadAnalysisSummary",
+    "EmbeddedPayloadEntry",
+    "EmbeddedPayloadIdentity",
+    "EmbeddedPayloadLocation",
     "EntropyAnalysisData",
     "EntropyRegion",
     "Evidence",
