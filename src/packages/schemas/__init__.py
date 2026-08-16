@@ -25,6 +25,11 @@ from packages.schemas.elf import (
     ELFSecurityInfo,
     ELFSegment,
 )
+from packages.schemas.elfnotes import (
+    ELFNoteAnalysisData,
+    ELFNoteEntry,
+    ELFNoteSection,
+)
 from packages.schemas.elfrelocations import (
     ELFRelocationAnalysisData,
     ELFRelocationEntry,
@@ -158,6 +163,9 @@ __all__ = [
     "ELFAnalysisData",
     "ELFDynamicInfo",
     "ELFHeaderInfo",
+    "ELFNoteAnalysisData",
+    "ELFNoteEntry",
+    "ELFNoteSection",
     "ELFRelocationAnalysisData",
     "ELFRelocationEntry",
     "ELFRelocationSection",

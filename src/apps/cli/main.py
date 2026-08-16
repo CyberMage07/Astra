@@ -12,6 +12,7 @@ from rich.table import Table
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elfnotes import ELFNotesAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
@@ -3083,6 +3084,172 @@ def elfrelocations(sample: Path) -> None:
 
     else:
         console.print("[green]No suspicious ELF relocation indicators detected.[/green]")
+
+
+@app.command()
+def elfnotes(sample: Path) -> None:
+    """Analyze ELF notes, Build-ID, ABI metadata, and GNU properties."""
+    try:
+        result = ELFNotesAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown ELF note analysis error"
+
+        console.print(f"[bold red]ELF note analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Note and ABI Analysis",
+        show_header=False,
+    )
+
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Note sections",
+        ("Yes" if data["note_sections_present"] else "No"),
+    )
+    summary.add_row(
+        "Sections",
+        str(data["note_section_count"]),
+    )
+    summary.add_row(
+        "Notes",
+        str(data["note_count"]),
+    )
+    summary.add_row(
+        "Build-ID",
+        data["build_id"] or "-",
+    )
+    summary.add_row(
+        "ABI tag",
+        ("Yes" if data["abi_tag_present"] else "No"),
+    )
+    summary.add_row(
+        "ABI OS",
+        data["abi_os"] or "-",
+    )
+
+    abi_version = "-"
+
+    if data["abi_major"] is not None:
+        abi_version = ".".join(
+            str(value)
+            for value in (
+                data["abi_major"],
+                data["abi_minor"],
+                data["abi_patch"],
+            )
+            if value is not None
+        )
+
+    summary.add_row(
+        "ABI version",
+        abi_version,
+    )
+    summary.add_row(
+        "GNU property",
+        ("Yes" if data["gnu_property_present"] else "No"),
+    )
+    summary.add_row(
+        "IBT",
+        ("Yes" if data["ibt_enabled"] else "No"),
+    )
+    summary.add_row(
+        "SHSTK",
+        ("Yes" if data["shstk_enabled"] else "No"),
+    )
+    summary.add_row(
+        "Malformed notes",
+        str(data["malformed_note_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["sections"]:
+        sections_table = Table(title=(f"ELF Note Sections ({len(data['sections'])})"))
+
+        sections_table.add_column("Section")
+        sections_table.add_column(
+            "Notes",
+            justify="right",
+        )
+        sections_table.add_column(
+            "Malformed",
+            justify="right",
+        )
+
+        for section in data["sections"]:
+            sections_table.add_row(
+                str(section["name"]),
+                str(section["note_count"]),
+                str(section["malformed_note_count"]),
+            )
+
+        console.print(sections_table)
+
+    property_rows = []
+
+    for section in data["sections"]:
+        for note in section["notes"]:
+            if note["gnu_property_type"] is not None:
+                property_rows.append(note)
+
+    if property_rows:
+        properties = Table(title="GNU ELF Properties")
+
+        properties.add_column("Property")
+        properties.add_column("Value")
+        properties.add_column("Section")
+
+        for note in property_rows:
+            properties.add_row(
+                str(note["gnu_property_type"]),
+                str(note["gnu_property_value"] or "-"),
+                str(note["section_name"]),
+            )
+
+        console.print(properties)
+
+    if result.findings:
+        findings_table = Table(title=(f"ELF Note Findings ({len(result.findings)})"))
+
+        findings_table.add_column("Severity")
+        findings_table.add_column("Category")
+        findings_table.add_column("Finding")
+        findings_table.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        for finding in result.findings:
+            findings_table.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings_table)
+
+    else:
+        console.print("[green]No suspicious ELF note indicators detected.[/green]")
 
 
 @app.command()
