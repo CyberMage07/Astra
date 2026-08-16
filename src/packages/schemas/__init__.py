@@ -23,6 +23,11 @@ from packages.schemas.exports import (
     ExportEntry,
 )
 from packages.schemas.filetype import FileTypeResult
+from packages.schemas.fingerprints import (
+    FingerprintAnalysisData,
+    FingerprintImport,
+    FingerprintLibrary,
+)
 from packages.schemas.importdirectories import (
     BoundImportEntry,
     DelayImportEntry,
@@ -134,6 +139,9 @@ __all__ = [
     "FileHashes",
     "FileTypeResult",
     "Finding",
+    "FingerprintAnalysisData",
+    "FingerprintImport",
+    "FingerprintLibrary",
     "IOCAnalysisData",
     "IOCIndicator",
     "IOCSummary",

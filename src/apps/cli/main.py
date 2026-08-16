@@ -14,6 +14,7 @@ from analyzers.dotnet import DotNetAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
+from analyzers.fingerprints import FingerprintsAnalyzer
 from analyzers.importdirectories import ImportDirectoriesAnalyzer
 from analyzers.ioc import IOCAnalyzer
 from analyzers.loadconfig import LoadConfigAnalyzer
@@ -2042,6 +2043,97 @@ def tls(sample: Path) -> None:
         )
 
     console.print(findings)
+
+
+@app.command()
+def fingerprints(sample: Path) -> None:
+    """Generate PE import fingerprints and ImpHash."""
+    try:
+        result = FingerprintsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown fingerprint-analysis error"
+        )
+        console.print(f"[bold red]Fingerprint analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="PE Fingerprint Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Fingerprint available",
+        "Yes" if data["fingerprint_available"] else "No",
+    )
+    summary.add_row(
+        "ImpHash",
+        str(data["imphash"] or "-"),
+    )
+    summary.add_row(
+        "Libraries",
+        str(data["import_library_count"]),
+    )
+    summary.add_row(
+        "Imports",
+        str(data["import_count"]),
+    )
+    summary.add_row(
+        "Named imports",
+        str(data["named_import_count"]),
+    )
+    summary.add_row(
+        "Ordinal imports",
+        str(data["ordinal_import_count"]),
+    )
+    summary.add_row(
+        "Malformed imports",
+        str(data["malformed_import_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["libraries"]:
+        table = Table(title=f"Fingerprint Libraries ({len(data['libraries'])})")
+        table.add_column("Library", style="cyan")
+        table.add_column("Imports", justify="right")
+        table.add_column("Named", justify="right")
+        table.add_column("Ordinal", justify="right")
+
+        for library in data["libraries"]:
+            table.add_row(
+                str(library["name"]),
+                str(library["import_count"]),
+                str(library["named_import_count"]),
+                str(library["ordinal_import_count"]),
+            )
+
+        console.print(table)
+
+    if data["fingerprint_source"]:
+        source = str(data["fingerprint_source"])
+        preview_length = 240
+        preview = source if len(source) <= preview_length else f"{source[:preview_length]}..."
+
+        console.print("[bold]Normalized fingerprint source preview:[/bold]")
+        console.print(preview)
+
+    console.print("[green]Fingerprint generation completed.[/green]")
 
 
 @app.command()

@@ -10,6 +10,7 @@ from analyzers.dotnet import DotNetAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
 from analyzers.filetype import identify_file
+from analyzers.fingerprints import FingerprintsAnalyzer
 from analyzers.hashing import calculate_hashes
 from analyzers.importdirectories import ImportDirectoriesAnalyzer
 from analyzers.ioc import IOCAnalyzer
@@ -94,6 +95,7 @@ class AnalysisOrchestrator:
                 ImportDirectoriesAnalyzer(),
                 RelocationsAnalyzer(),
                 MetadataAnalyzer(),
+                FingerprintsAnalyzer(),
                 ImportAnalyzer(),
                 PackerAnalyzer(),
             )
