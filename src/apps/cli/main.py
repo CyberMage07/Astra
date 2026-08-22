@@ -12,6 +12,7 @@ from rich.table import Table
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elfdynamic import ELFDynamicLinkingAnalyzer
 from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
 from analyzers.elfpacker import ELFPackerAnalyzer
@@ -3945,6 +3946,188 @@ def importdirectories(sample: Path) -> None:
         )
 
     console.print(findings)
+
+
+@app.command()
+def elfdynamic(sample: Path) -> None:
+    """Analyze ELF dynamic linking, PLT, GOT, and binding hardening."""
+    try:
+        result = ELFDynamicLinkingAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message
+            if result.errors
+            else "Unknown ELF dynamic-linking analysis error"
+        )
+
+        console.print(f"[bold red]ELF dynamic-linking analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Dynamic Linking / PLT-GOT Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Dynamic linking",
+        "Yes" if data["dynamic_linking_present"] else "No",
+    )
+    summary.add_row(
+        "PLT",
+        "Yes" if data["plt_present"] else "No",
+    )
+    summary.add_row(
+        "PLT.GOT",
+        "Yes" if data["plt_got_present"] else "No",
+    )
+    summary.add_row(
+        "PLT.SEC",
+        "Yes" if data["plt_sec_present"] else "No",
+    )
+    summary.add_row(
+        "GOT",
+        "Yes" if data["got_present"] else "No",
+    )
+    summary.add_row(
+        "GOT.PLT",
+        "Yes" if data["got_plt_present"] else "No",
+    )
+    summary.add_row(
+        "PLT sections",
+        str(data["plt_section_count"]),
+    )
+    summary.add_row(
+        "GOT sections",
+        str(data["got_section_count"]),
+    )
+    summary.add_row(
+        "PLT entries",
+        str(data["plt_entry_count"]),
+    )
+    summary.add_row(
+        "GOT entries",
+        str(data["got_entry_estimate"]),
+    )
+    summary.add_row(
+        "PLT relocations",
+        str(data["plt_relocation_count"]),
+    )
+    summary.add_row(
+        "DT_PLTGOT",
+        (hex(data["plt_got_address"]) if data["plt_got_address"] is not None else "-"),
+    )
+    summary.add_row(
+        "DT_JMPREL",
+        (hex(data["jmprel_address"]) if data["jmprel_address"] is not None else "-"),
+    )
+    summary.add_row(
+        "DT_PLTRELSZ",
+        str(data["plt_relocation_size"]),
+    )
+    summary.add_row(
+        "DT_PLTREL",
+        data["plt_relocation_type"] or "-",
+    )
+    summary.add_row(
+        "BIND_NOW",
+        "Yes" if data["bind_now"] else "No",
+    )
+    summary.add_row(
+        "Lazy binding",
+        "Yes" if data["lazy_binding"] else "No",
+    )
+    summary.add_row(
+        "RELRO",
+        "Yes" if data["relro"] else "No",
+    )
+    summary.add_row(
+        "Full RELRO",
+        "Yes" if data["full_relro"] else "No",
+    )
+    summary.add_row(
+        "Writable GOT",
+        "Yes" if data["writable_got"] else "No",
+    )
+    summary.add_row(
+        "Malformed entries",
+        str(data["malformed_entry_count"]),
+    )
+    summary.add_row(
+        "Suspicious linking",
+        "Yes" if data["suspicious_dynamic_linking"] else "No",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["sections"]:
+        sections = Table(title=f"PLT/GOT Sections ({len(data['sections'])})")
+
+        sections.add_column("Name")
+        sections.add_column("Type")
+        sections.add_column("Address")
+        sections.add_column("Offset")
+        sections.add_column("Size", justify="right")
+        sections.add_column("Entries", justify="right")
+        sections.add_column("Flags")
+
+        for section in data["sections"]:
+            flags: list[str] = []
+
+            if section["allocatable"]:
+                flags.append("A")
+
+            if section["writable"]:
+                flags.append("W")
+
+            if section["executable"]:
+                flags.append("X")
+
+            sections.add_row(
+                str(section["name"]),
+                str(section["section_type"]),
+                hex(section["address"]),
+                hex(section["offset"]),
+                str(section["size"]),
+                str(section["entry_count"]),
+                "".join(flags) or "-",
+            )
+
+        console.print(sections)
+
+    if result.findings:
+        findings = Table(title=f"ELF Dynamic-Linking Findings ({len(result.findings)})")
+
+        findings.add_column("Severity")
+        findings.add_column("Category")
+        findings.add_column("Finding")
+        findings.add_column("Confidence", justify="right")
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
+    else:
+        console.print("[green]No suspicious ELF dynamic-linking indicators detected.[/green]")
 
 
 @app.command()
