@@ -39,6 +39,10 @@ from packages.schemas.elfrelocations import (
     ELFRelocationEntry,
     ELFRelocationSection,
 )
+from packages.schemas.elfsections import (
+    ELFSectionAnalysisData,
+    ELFSectionEntry,
+)
 from packages.schemas.elfsymbols import (
     ELFSymbolAnalysisData,
     ELFSymbolEntry,
@@ -176,6 +180,8 @@ __all__ = [
     "ELFRelocationEntry",
     "ELFRelocationSection",
     "ELFSection",
+    "ELFSectionAnalysisData",
+    "ELFSectionEntry",
     "ELFSecurityInfo",
     "ELFSegment",
     "ELFSymbolAnalysisData",

@@ -15,6 +15,7 @@ from analyzers.elf import ELFAnalyzer
 from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
+from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
@@ -3042,6 +3043,185 @@ def elf(sample: Path) -> None:
         console.print(findings)
     else:
         console.print("[green]No suspicious ELF indicators detected.[/green]")
+
+
+@app.command()
+def elfsections(sample: Path) -> None:
+    """Analyze ELF section entropy and layout anomalies."""
+    try:
+        result = ELFSectionsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown ELF section analysis error"
+        )
+
+        console.print(f"[bold red]ELF section analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Section Entropy & Layout Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Sections",
+        str(data["section_count"]),
+    )
+    summary.add_row(
+        "Executable",
+        str(data["executable_section_count"]),
+    )
+    summary.add_row(
+        "Writable",
+        str(data["writable_section_count"]),
+    )
+    summary.add_row(
+        "RWX",
+        str(data["rwx_section_count"]),
+    )
+    summary.add_row(
+        "High entropy",
+        str(data["high_entropy_section_count"]),
+    )
+    summary.add_row(
+        "Suspicious names",
+        str(data["suspicious_name_count"]),
+    )
+    summary.add_row(
+        "Zero-sized mapped",
+        str(data["zero_sized_mapped_count"]),
+    )
+    summary.add_row(
+        "Overlapping",
+        str(data["overlapping_section_count"]),
+    )
+    summary.add_row(
+        "Out of bounds",
+        str(data["out_of_bounds_section_count"]),
+    )
+    summary.add_row(
+        "Malformed",
+        str(data["malformed_section_count"]),
+    )
+    summary.add_row(
+        "Large section table",
+        "Yes" if data["unusually_large_section_table"] else "No",
+    )
+    summary.add_row(
+        "Average entropy",
+        f"{data['average_entropy']:.3f}",
+    )
+    summary.add_row(
+        "Maximum entropy",
+        f"{data['maximum_entropy']:.3f}",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["sections"]:
+        sections = Table(title=f"ELF Sections ({len(data['sections'])})")
+
+        sections.add_column(
+            "Index",
+            justify="right",
+        )
+        sections.add_column("Name")
+        sections.add_column("Type")
+        sections.add_column(
+            "Size",
+            justify="right",
+        )
+        sections.add_column(
+            "Entropy",
+            justify="right",
+        )
+        sections.add_column("Flags")
+        sections.add_column("Anomalies")
+
+        for section in data["sections"]:
+            flags: list[str] = []
+
+            if section["allocatable"]:
+                flags.append("A")
+
+            if section["writable"]:
+                flags.append("W")
+
+            if section["executable"]:
+                flags.append("X")
+
+            anomalies: list[str] = []
+
+            if section["rwx"]:
+                anomalies.append("RWX")
+
+            if section["high_entropy"]:
+                anomalies.append("high-entropy")
+
+            if section["suspicious_name"]:
+                anomalies.append("suspicious-name")
+
+            if section["zero_sized_mapped"]:
+                anomalies.append("zero-mapped")
+
+            if section["overlapping"]:
+                anomalies.append("overlap")
+
+            if section["out_of_bounds"]:
+                anomalies.append("out-of-bounds")
+
+            if section["malformed"]:
+                anomalies.append("malformed")
+
+            sections.add_row(
+                str(section["index"]),
+                str(section["name"]),
+                str(section["section_type"]),
+                f"{section['size']:,}",
+                f"{section['entropy']:.3f}",
+                "".join(flags) or "-",
+                ", ".join(anomalies) or "-",
+            )
+
+        console.print(sections)
+
+    if result.findings:
+        findings = Table(title=f"ELF Section Findings ({len(result.findings)})")
+
+        findings.add_column("Severity")
+        findings.add_column("Category")
+        findings.add_column("Finding")
+        findings.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
+    else:
+        console.print("[green]No suspicious ELF section indicators detected.[/green]")
 
 
 @app.command()

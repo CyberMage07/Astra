@@ -11,6 +11,7 @@ from analyzers.elf import ELFAnalyzer
 from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
+from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
@@ -145,6 +146,7 @@ class AnalysisOrchestrator:
 
         elf_analyzers = (
             ELFAnalyzer(),
+            ELFSectionsAnalyzer(),
             ELFSymbolsAnalyzer(),
             ELFRelocationsAnalyzer(),
             ELFNotesAnalyzer(),
