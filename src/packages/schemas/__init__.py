@@ -55,6 +55,12 @@ from packages.schemas.elfsymbols import (
     ELFSymbolAnalysisData,
     ELFSymbolEntry,
 )
+from packages.schemas.elfversioning import (
+    ELFSymbolVersionBinding,
+    ELFSymbolVersionDefinition,
+    ELFSymbolVersionRequirement,
+    ELFVersioningAnalysisData,
+)
 from packages.schemas.embedded import (
     EmbeddedAnalysisData,
     EmbeddedAnalysisLimits,
@@ -198,6 +204,10 @@ __all__ = [
     "ELFSegment",
     "ELFSymbolAnalysisData",
     "ELFSymbolEntry",
+    "ELFSymbolVersionBinding",
+    "ELFSymbolVersionDefinition",
+    "ELFSymbolVersionRequirement",
+    "ELFVersioningAnalysisData",
     "EmbeddedAnalysisData",
     "EmbeddedAnalysisLimits",
     "EmbeddedPayloadAnalysisSummary",

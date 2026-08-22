@@ -19,6 +19,7 @@ from analyzers.elfpacker import ELFPackerAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
+from analyzers.elfversioning import ELFVersioningAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
 from analyzers.exports import ExportsAnalyzer
@@ -3946,6 +3947,176 @@ def importdirectories(sample: Path) -> None:
         )
 
     console.print(findings)
+
+
+@app.command()
+def elfversioning(sample: Path) -> None:
+    """Analyze ELF GNU symbol versioning and ABI dependencies."""
+    try:
+        result = ELFVersioningAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown ELF versioning analysis error"
+        )
+
+        console.print(f"[bold red]ELF versioning analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF GNU Symbol Versioning & ABI Dependency Analysis",
+        show_header=False,
+    )
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Versioning present",
+        "Yes" if data["versioning_present"] else "No",
+    )
+    summary.add_row(
+        "VERSYM",
+        "Yes" if data["versym_present"] else "No",
+    )
+    summary.add_row(
+        "VERNEED",
+        "Yes" if data["verneed_present"] else "No",
+    )
+    summary.add_row(
+        "VERDEF",
+        "Yes" if data["verdef_present"] else "No",
+    )
+    summary.add_row(
+        "Required libraries",
+        str(data["required_library_count"]),
+    )
+    summary.add_row(
+        "Required versions",
+        str(data["required_version_count"]),
+    )
+    summary.add_row(
+        "Defined versions",
+        str(data["defined_version_count"]),
+    )
+    summary.add_row(
+        "Versioned symbols",
+        str(data["versioned_symbol_count"]),
+    )
+    summary.add_row(
+        "Imported versioned",
+        str(data["imported_versioned_symbol_count"]),
+    )
+    summary.add_row(
+        "Exported versioned",
+        str(data["exported_versioned_symbol_count"]),
+    )
+    summary.add_row(
+        "GLIBC versions",
+        str(data["glibc_version_count"]),
+    )
+    summary.add_row(
+        "GLIBCXX versions",
+        str(data["glibcxx_version_count"]),
+    )
+    summary.add_row(
+        "CXXABI versions",
+        str(data["cxxabi_version_count"]),
+    )
+    summary.add_row(
+        "Highest GLIBC",
+        data["highest_glibc_version"] or "-",
+    )
+    summary.add_row(
+        "Highest GLIBCXX",
+        data["highest_glibcxx_version"] or "-",
+    )
+    summary.add_row(
+        "Highest CXXABI",
+        data["highest_cxxabi_version"] or "-",
+    )
+    summary.add_row(
+        "Malformed entries",
+        str(data["malformed_entry_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["requirements"]:
+        requirements = Table(title=f"Required Symbol Versions ({len(data['requirements'])})")
+
+        requirements.add_column("Library")
+        requirements.add_column("Version")
+        requirements.add_column(
+            "Index",
+            justify="right",
+        )
+        requirements.add_column("Hidden")
+
+        for requirement in data["requirements"]:
+            requirements.add_row(
+                str(requirement["library"]),
+                str(requirement["version"]),
+                str(requirement["version_index"]),
+                "Yes" if requirement["hidden"] else "No",
+            )
+
+        console.print(requirements)
+
+    if data["definitions"]:
+        definitions = Table(title=f"Defined Symbol Versions ({len(data['definitions'])})")
+
+        definitions.add_column("Version")
+        definitions.add_column(
+            "Index",
+            justify="right",
+        )
+        definitions.add_column("Base")
+        definitions.add_column("Weak")
+
+        for definition in data["definitions"]:
+            definitions.add_row(
+                str(definition["version"]),
+                str(definition["version_index"]),
+                "Yes" if definition["base"] else "No",
+                "Yes" if definition["weak"] else "No",
+            )
+
+        console.print(definitions)
+
+    if result.findings:
+        findings = Table(title=f"ELF Versioning Findings ({len(result.findings)})")
+
+        findings.add_column("Severity")
+        findings.add_column("Category")
+        findings.add_column("Finding")
+        findings.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
+    else:
+        console.print("[green]No suspicious ELF symbol-versioning indicators detected.[/green]")
 
 
 @app.command()
