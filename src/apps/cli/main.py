@@ -14,6 +14,7 @@ from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
 from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
+from analyzers.elfpacker import ELFPackerAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
@@ -3222,6 +3223,155 @@ def elfsections(sample: Path) -> None:
         console.print(findings)
     else:
         console.print("[green]No suspicious ELF section indicators detected.[/green]")
+
+
+@app.command()
+def elfpacker(sample: Path) -> None:
+    """Analyze ELF packing and obfuscation indicators."""
+    try:
+        result = ELFPackerAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = result.errors[0].message if result.errors else "Unknown ELF packer analysis error"
+
+        console.print(f"[bold red]ELF packer analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Packer & Obfuscation Analysis",
+        show_header=False,
+    )
+
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Packed score",
+        f"{data['packed_score']} / 100",
+    )
+    summary.add_row(
+        "Likelihood",
+        str(data["packed_likelihood"]),
+    )
+    summary.add_row(
+        "Suspected packer",
+        data["suspected_packer"] or "-",
+    )
+    summary.add_row(
+        "Known signature",
+        "Yes" if data["known_packer_signature"] else "No",
+    )
+    summary.add_row(
+        "High-entropy sections",
+        str(data["high_entropy_section_count"]),
+    )
+    summary.add_row(
+        "Executable high entropy",
+        str(data["executable_high_entropy_count"]),
+    )
+    summary.add_row(
+        "RWX sections",
+        str(data["rwx_section_count"]),
+    )
+    summary.add_row(
+        "Suspicious names",
+        str(data["suspicious_section_name_count"]),
+    )
+    summary.add_row(
+        "Stripped",
+        "Yes" if data["stripped"] else "No",
+    )
+    summary.add_row(
+        "Symbol table",
+        "Present" if data["symbol_table_present"] else "Absent",
+    )
+    summary.add_row(
+        "Imports",
+        str(data["import_count"]),
+    )
+    summary.add_row(
+        "Relocations",
+        str(data["relocation_count"]),
+    )
+    summary.add_row(
+        "Unusual entry point",
+        "Yes" if data["unusual_entry_point"] else "No",
+    )
+    summary.add_row(
+        "Dynamic loading",
+        "Yes" if data["suspicious_dynamic_loading"] else "No",
+    )
+    summary.add_row(
+        "Suspicious layout",
+        "Yes" if data["suspicious_layout"] else "No",
+    )
+    summary.add_row(
+        "Triggered indicators",
+        str(data["evidence_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["indicators"]:
+        indicators = Table(title=f"Packer Indicators ({len(data['indicators'])})")
+
+        indicators.add_column("Indicator")
+        indicators.add_column("Category")
+        indicators.add_column(
+            "Weight",
+            justify="right",
+        )
+        indicators.add_column("Triggered")
+        indicators.add_column("Evidence")
+
+        for indicator in data["indicators"]:
+            indicators.add_row(
+                str(indicator["name"]),
+                str(indicator["category"]),
+                str(indicator["weight"]),
+                "Yes" if indicator["triggered"] else "No",
+                ", ".join(str(value) for value in indicator["evidence"]) or "-",
+            )
+
+        console.print(indicators)
+
+    if result.findings:
+        findings = Table(title=f"ELF Packer Findings ({len(result.findings)})")
+
+        findings.add_column("Severity")
+        findings.add_column("Category")
+        findings.add_column("Finding")
+        findings.add_column(
+            "Confidence",
+            justify="right",
+        )
+
+        for finding in result.findings:
+            findings.add_row(
+                finding.severity.value.upper(),
+                finding.category,
+                finding.title,
+                f"{finding.confidence}%",
+            )
+
+        console.print(findings)
+    else:
+        console.print("[green]No strong ELF packing or obfuscation indicators detected.[/green]")
 
 
 @app.command()

@@ -10,6 +10,7 @@ from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
 from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
+from analyzers.elfpacker import ELFPackerAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
@@ -151,6 +152,7 @@ class AnalysisOrchestrator:
             ELFRelocationsAnalyzer(),
             ELFNotesAnalyzer(),
             ELFFingerprintsAnalyzer(),
+            ELFPackerAnalyzer(),
         )
 
         for analyzer in elf_analyzers:

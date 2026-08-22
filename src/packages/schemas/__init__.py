@@ -34,6 +34,10 @@ from packages.schemas.elfnotes import (
     ELFNoteEntry,
     ELFNoteSection,
 )
+from packages.schemas.elfpacker import (
+    ELFPackerAnalysisData,
+    ELFPackerIndicator,
+)
 from packages.schemas.elfrelocations import (
     ELFRelocationAnalysisData,
     ELFRelocationEntry,
@@ -176,6 +180,8 @@ __all__ = [
     "ELFNoteAnalysisData",
     "ELFNoteEntry",
     "ELFNoteSection",
+    "ELFPackerAnalysisData",
+    "ELFPackerIndicator",
     "ELFRelocationAnalysisData",
     "ELFRelocationEntry",
     "ELFRelocationSection",
