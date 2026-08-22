@@ -15,6 +15,7 @@ from analyzers.elfpacker import ELFPackerAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
+from analyzers.elftoolchain import ELFToolchainAnalyzer
 from analyzers.elfversioning import ELFVersioningAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
@@ -157,6 +158,7 @@ class AnalysisOrchestrator:
             ELFPackerAnalyzer(),
             ELFDynamicLinkingAnalyzer(),
             ELFVersioningAnalyzer(),
+            ELFToolchainAnalyzer(),
         )
 
         for analyzer in elf_analyzers:

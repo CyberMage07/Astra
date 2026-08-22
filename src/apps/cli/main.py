@@ -19,6 +19,7 @@ from analyzers.elfpacker import ELFPackerAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsections import ELFSectionsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
+from analyzers.elftoolchain import ELFToolchainAnalyzer
 from analyzers.elfversioning import ELFVersioningAnalyzer
 from analyzers.embedded import EmbeddedAnalyzer
 from analyzers.entropy import EntropyAnalyzer
@@ -3374,6 +3375,144 @@ def elfpacker(sample: Path) -> None:
         console.print(findings)
     else:
         console.print("[green]No strong ELF packing or obfuscation indicators detected.[/green]")
+
+
+@app.command()
+def elftoolchain(sample: Path) -> None:
+    """Analyze ELF compiler, linker, runtime, and build provenance."""
+    try:
+        result = ELFToolchainAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown ELF toolchain analysis error"
+        )
+
+        console.print(f"[bold red]ELF toolchain analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Compiler / Toolchain / Build Provenance Analysis",
+        show_header=False,
+    )
+
+    summary.add_column("Field", style="cyan")
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Toolchain detected",
+        "Yes" if data["toolchain_detected"] else "No",
+    )
+    summary.add_row(
+        "Compiler",
+        data["primary_compiler"] or "-",
+    )
+    summary.add_row(
+        "Compiler version",
+        data["compiler_version"] or "-",
+    )
+    summary.add_row(
+        "Linker",
+        data["linker"] or "-",
+    )
+    summary.add_row(
+        "Linker version",
+        data["linker_version"] or "-",
+    )
+    summary.add_row(
+        "Language",
+        data["language"] or "-",
+    )
+    summary.add_row(
+        "Runtime",
+        data["runtime"] or "-",
+    )
+    summary.add_row(
+        "GCC",
+        "Yes" if data["gcc_detected"] else "No",
+    )
+    summary.add_row(
+        "Clang",
+        "Yes" if data["clang_detected"] else "No",
+    )
+    summary.add_row(
+        "Rust",
+        "Yes" if data["rust_detected"] else "No",
+    )
+    summary.add_row(
+        "Go",
+        "Yes" if data["go_detected"] else "No",
+    )
+    summary.add_row(
+        "LTO",
+        "Yes" if data["lto_detected"] else "No",
+    )
+    summary.add_row(
+        ".comment",
+        "Yes" if data["comment_section_present"] else "No",
+    )
+    summary.add_row(
+        "Comment entries",
+        str(data["comment_entry_count"]),
+    )
+    summary.add_row(
+        "Build ID",
+        data["build_id"] or "-",
+    )
+    summary.add_row(
+        "Compiler markers",
+        str(data["compiler_marker_count"]),
+    )
+    summary.add_row(
+        "Linker markers",
+        str(data["linker_marker_count"]),
+    )
+    summary.add_row(
+        "Runtime markers",
+        str(data["runtime_marker_count"]),
+    )
+    summary.add_row(
+        "Language markers",
+        str(data["language_marker_count"]),
+    )
+    summary.add_row(
+        "Malformed",
+        str(data["malformed_entry_count"]),
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["markers"]:
+        markers = Table(title=f"Toolchain Markers ({len(data['markers'])})")
+
+        markers.add_column("Category")
+        markers.add_column("Confidence", justify="right")
+        markers.add_column("Source")
+        markers.add_column("Value")
+
+        for marker in data["markers"]:
+            markers.add_row(
+                str(marker["category"]),
+                f"{marker['confidence']}%",
+                str(marker["source"]),
+                str(marker["value"]),
+            )
+
+        console.print(markers)
+
+    console.print("[green]ELF toolchain provenance analysis completed.[/green]")
 
 
 @app.command()
