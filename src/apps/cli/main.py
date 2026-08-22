@@ -12,6 +12,7 @@ from rich.table import Table
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
@@ -2599,6 +2600,108 @@ def relocations(sample: Path) -> None:
         )
 
     console.print(findings)
+
+
+@app.command()
+def elffingerprints(sample: Path) -> None:
+    """Generate deterministic ELF fingerprints."""
+    try:
+        result = ELFFingerprintsAnalyzer().analyze(sample)
+    except (FileNotFoundError, ValueError) as error:
+        _handle_path_error(error)
+
+    if result.status is not AnalysisStatus.COMPLETED:
+        message = (
+            result.errors[0].message if result.errors else "Unknown ELF fingerprint analysis error"
+        )
+
+        console.print(f"[bold red]ELF fingerprint analysis failed:[/bold red] {message}")
+        raise typer.Exit(code=1)
+
+    data = result.data
+
+    summary = Table(
+        title="ELF Fingerprint Analysis",
+        show_header=False,
+    )
+
+    summary.add_column(
+        "Field",
+        style="cyan",
+    )
+    summary.add_column("Value")
+
+    summary.add_row(
+        "Sample",
+        str(sample.expanduser().resolve()),
+    )
+    summary.add_row(
+        "Fingerprint available",
+        "Yes" if data["fingerprint_available"] else "No",
+    )
+    summary.add_row(
+        "Imported symbols",
+        str(data["imported_symbol_count"]),
+    )
+    summary.add_row(
+        "Needed libraries",
+        str(data["needed_library_count"]),
+    )
+    summary.add_row(
+        "Sections",
+        str(data["section_count"]),
+    )
+    summary.add_row(
+        "Sources",
+        str(data["source_count"]),
+    )
+    summary.add_row(
+        "Build ID",
+        data["build_id"] or "-",
+    )
+    summary.add_row(
+        "Import fingerprint",
+        data["import_fingerprint"] or "-",
+    )
+    summary.add_row(
+        "Library fingerprint",
+        data["library_fingerprint"] or "-",
+    )
+    summary.add_row(
+        "Section fingerprint",
+        data["section_fingerprint"] or "-",
+    )
+    summary.add_row(
+        "Combined fingerprint",
+        data["combined_fingerprint"] or "-",
+    )
+    summary.add_row(
+        "Duration",
+        f"{result.duration_ms} ms",
+    )
+
+    console.print(summary)
+
+    if data["sources"]:
+        sources = Table(title=(f"Fingerprint Sources ({len(data['sources'])})"))
+
+        sources.add_column("Source")
+        sources.add_column(
+            "Items",
+            justify="right",
+        )
+        sources.add_column("SHA-256")
+
+        for source in data["sources"]:
+            sources.add_row(
+                str(source["name"]),
+                str(source["item_count"]),
+                str(source["sha256"]),
+            )
+
+        console.print(sources)
+
+    console.print("[green]ELF fingerprint generation completed.[/green]")
 
 
 @app.command()

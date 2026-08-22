@@ -8,6 +8,7 @@ from pathlib import Path
 from analyzers.debug import DebugDirectoryAnalyzer
 from analyzers.dotnet import DotNetAnalyzer
 from analyzers.elf import ELFAnalyzer
+from analyzers.elffingerprints import ELFFingerprintsAnalyzer
 from analyzers.elfnotes import ELFNotesAnalyzer
 from analyzers.elfrelocations import ELFRelocationsAnalyzer
 from analyzers.elfsymbols import ELFSymbolsAnalyzer
@@ -147,6 +148,7 @@ class AnalysisOrchestrator:
             ELFSymbolsAnalyzer(),
             ELFRelocationsAnalyzer(),
             ELFNotesAnalyzer(),
+            ELFFingerprintsAnalyzer(),
         )
 
         for analyzer in elf_analyzers:

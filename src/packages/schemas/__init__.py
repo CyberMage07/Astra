@@ -25,6 +25,10 @@ from packages.schemas.elf import (
     ELFSecurityInfo,
     ELFSegment,
 )
+from packages.schemas.elffingerprints import (
+    ELFFingerprintAnalysisData,
+    ELFFingerprintSource,
+)
 from packages.schemas.elfnotes import (
     ELFNoteAnalysisData,
     ELFNoteEntry,
@@ -162,6 +166,8 @@ __all__ = [
     "DotNetStreamInfo",
     "ELFAnalysisData",
     "ELFDynamicInfo",
+    "ELFFingerprintAnalysisData",
+    "ELFFingerprintSource",
     "ELFHeaderInfo",
     "ELFNoteAnalysisData",
     "ELFNoteEntry",
